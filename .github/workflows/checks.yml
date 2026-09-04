@@ -1,0 +1,48 @@
+# The three test scripts and a Docker build, on every push and pull request.
+#
+# They are plain scripts rather than a pytest suite, so there is no runner to configure:
+# each one exits non-zero on failure and prints what it checked. The Docker build is here
+# because the add-on image is built on the user's own machine at install time -- a broken
+# Dockerfile is not discovered until somebody tries to install it.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install ./solar2000direct pyyaml
+      - name: Add-on manifest
+        run: python solar2000direct/tests/test_addon_manifest.py
+      - name: Energy accounting
+        run: python solar2000direct/tests/test_history_energy.py
+      - name: Installation shapes
+        run: python solar2000direct/tests/test_installation_shapes.py
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyflakes
+      # Undefined names and unused imports only. `s2d-bench` shipped for months calling a
+      # function that did not exist, which this would have caught on the commit that broke it.
+      - run: pyflakes solar2000direct/src/solar2000direct solar2000direct/tests
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the add-on image
+        run: docker build -t solar2000direct:ci solar2000direct

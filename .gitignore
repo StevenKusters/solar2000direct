@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+# Diagnostic output from a real installation: carries its addresses and timings.
+probe-report*.json
+bench-report*.json
+data/
+.env
+.DS_Store
+
+# Contracts, bills and other personal documents dropped in here for analysis.
+*.pdf

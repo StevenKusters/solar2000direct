@@ -1,0 +1,73 @@
+[project]
+name = "solar2000direct"
+version = "1.0.0"
+description = "Local, real-time telemetry for Huawei SUN2000 / LUNA2000 installations over Modbus TCP"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = [
+    # Bounded above as well as below. The add-on image is built on the user's own machine
+    # and resolves these from PyPI at build time, so an upstream major release lands on
+    # everybody at once; huawei-solar in particular is where the register map lives.
+    "huawei-solar>=3.0.7,<4",
+    # aiohttp serves double duty as the HTTP client for Home Assistant and the server for
+    # the API, SSE stream and dashboard. One dependency instead of three keeps the image small.
+    "aiohttp>=3.10,<4",
+    "aiomqtt>=2.3,<3",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.12,<0.17", "amqtt>=0.11", "pyyaml>=6"]  # amqtt provides a local broker for integration tests
+
+[project.scripts]
+s2d-probe = "solar2000direct.probe:main"
+s2d-bench = "solar2000direct.bench:main"
+s2d-read = "solar2000direct.read:main"
+solar2000direct = "solar2000direct.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/solar2000direct"]
+artifacts = ["src/solar2000direct/web/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+# The code is annotated with `# noqa` codes from a rule set the config never selected, so
+# `ruff check` on a fresh clone reported over a hundred findings against rules nobody had
+# opted into, while the suppressions sat there referring to rules that were not running.
+# This selects the set the annotations were written against.
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "ANN",
+          "DTZ", "S", "BLE", "TRY", "PL", "SLF", "RUF"]
+ignore = [
+    "ANN001", "ANN002", "ANN003", "ANN201", "ANN204", "ANN206",  # annotate where it helps
+    "TRY003",   # long messages inline: these are read by installers, not developers
+    "TRY300",   # `return` in `try` rather than `else` reads better in short handlers
+    "PLR0913",  # argument counts are a poor proxy for complexity here
+    "C408",     # dict() is clearer than {} in a few table definitions
+    "S101",     # asserts document invariants that cannot hold if the code is correct
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The tools print by design, and the tests reach into internals on purpose.
+# The tests are flat sequences of assertions and the tools are flat sequences of prints;
+# splitting either to satisfy a statement count would make both harder to follow.
+"tests/*" = ["SLF001", "PLR2004", "S608", "E501", "PLC0415", "E402", "PLR0915",
+             "PLR0911", "PLR0912", "B007", "PTH123"]
+"src/solar2000direct/probe.py" = ["PLR0915", "PLR0912", "PLR2004", "PTH123", "RUF059"]
+"src/solar2000direct/bench.py" = ["PLR0915", "PTH123"]
+# _interpret is one branch per shape of P1 meter; each is short and independent.
+"src/solar2000direct/homeassistant.py" = ["PLR0912", "PLR0915"]
+# Register names are interpolated into SQL, never user input; the values are bound.
+"src/solar2000direct/history.py" = ["S608"]
+# Shape() is frozen and immutable, so one shared default instance is safe here.
+"src/solar2000direct/registers.py" = ["B008", "E501"]
+# `value` is genuinely any register value, and the two max() calls read as what they mean:
+# what the panels are putting out, plus what the battery is giving back.
+"src/solar2000direct/state.py" = ["ANN401", "PLW3301", "PLR2004"]
+"src/solar2000direct/addon.py" = ["ANN401"]

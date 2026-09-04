@@ -1,0 +1,163 @@
+# solar2000direct — a fully worked example configuration
+#
+# You do not need this file to get started. Install the add-on, fill in the inverter
+# address, and everything else has a working default. This is here for when you want to
+# know what an option does, what a real value looks like, and whether you need it at all.
+#
+# The example is a made-up house: a 6 kW three-phase inverter, 20 panels of 430 Wp split
+# over two roof faces, one battery cabinet, a grid meter, and a Dutch smart meter read by
+# Home Assistant. Yours will differ in every particular. Copy the shape, not the numbers.
+#
+# To use it: Settings → Add-ons → solar2000direct → Configuration, switch the three-dot
+# menu to "Edit in YAML", and paste. Delete any line you do not need.
+
+# ─── Required ────────────────────────────────────────────────────────────────────
+# The only thing the add-on cannot work out for itself.
+
+inverter_host: 192.168.1.50     # IP or hostname of the inverter or its SDongle.
+                                # No port, no http:// prefix.
+
+# ─── Connection ──────────────────────────────────────────────────────────────────
+# Leave these alone unless the log says otherwise.
+
+inverter_port: 502              # 502 almost always. Some SDongles answer on 6607.
+inverter_unit_id: 1             # 1 behind an SDongle, 0 over the inverter's own WiFi.
+site_name: Home                 # Names the device in Home Assistant and prefixes every
+                                # entity ID. Changing it later renames them all, so pick
+                                # something you can live with: "Home", "Barn", "Office".
+log_level: INFO                 # DEBUG logs every Modbus exchange. That is a great deal.
+
+# ─── Polling ─────────────────────────────────────────────────────────────────────
+# The defaults are tuned for an SDongle, which answers in about a second. A tier that
+# overruns stretches itself rather than queueing, so these are floors, not promises.
+
+live_interval: 4                # Seconds between live readings: PV, grid, battery, load.
+slow_interval: 60               # Lifetime counters, per-phase meter power, battery config.
+pack_interval: 300              # Per-battery-pack readings. They drift over weeks.
+optimizer_enabled: true         # Per-panel data. Turn off if it disrupts the live loop.
+optimizer_interval: 300         # It is a slow file read, so it is deliberately far apart.
+
+# ─── History ─────────────────────────────────────────────────────────────────────
+# Three resolutions: every reading, then one a minute, then one an hour forever.
+
+history_full_days: 1            # Days kept at full poll resolution. One day keeps today
+                                # examinable second by second. A week costs about 7 MB/yr.
+history_minute_days: 90         # Days kept at one-minute resolution before hourly means.
+                                # A year costs about 23 MB.
+
+# ─── Home Assistant entities ─────────────────────────────────────────────────────
+
+mqtt_enabled: true              # Creates the entities. Turn off to run the dashboard only.
+mqtt_discovery_prefix: homeassistant   # Only change it if your Home Assistant uses a
+                                # different one, which happens when two instances share a
+                                # broker. The Supervisor supplies the broker credentials.
+
+# ─── Your array ──────────────────────────────────────────────────────────────────
+# The inverter reports how many strings it has, but not how many panels hang off each,
+# and it cannot know what they are rated at. Without these the per-panel comparisons and
+# the capacity bar have no denominator; everything else works regardless.
+#
+# These are repeating fields in the UI: add one entry, then add the next. Not a list
+# typed into one box.
+
+string_panel_counts:            # In string order. This example: 8 on the first, 12 on the
+  - 8                           # second. A bigger string produces more, which says nothing
+  - 12                          # about panel health — this is what makes them comparable.
+string_labels:                  # Optional, same order. Used everywhere instead of
+  - South                       # "String 1" and "String 2".
+  - West
+panel_watts: 430                # Nameplate watts of one panel. With the counts above this
+                                # gives 20 × 430 = 8.6 kWp, which the Solar tile's bar is
+                                # measured against. Leave 0 to use the inverter's rating.
+
+optimizer_string: 0             # Leave at 0. The inverter reports which strings carry
+                                # optimizers. Set it only if the panel card says nothing
+                                # about strings, meaning your firmware does not report it.
+backup_present: auto            # auto / yes / no. Detection reads the backup reserve, so
+                                # set "yes" if yours is configured to 0%.
+
+# ─── Prices ──────────────────────────────────────────────────────────────────────
+# All optional: leave energy_price_per_kwh at 0 and no money figures appear anywhere.
+#
+# Everything is per kWh in whole currency units, never cents: 24.5 cents is 0.245.
+# Prices are the two halves of a bill — what the energy costs, and everything charged
+# alongside it. Getting only the first half in understates both what importing costs and
+# what avoiding it saves, usually by more than the part you did enter.
+
+energy_price_per_kwh: 0.2450    # Day/peak rate for the energy itself.
+low_tariff_price_per_kwh: 0.2100   # Night/off-peak rate. Leave 0 if you have one tariff.
+feed_in_price_per_kwh: 0.0500   # What you are paid for a kWh you export. Usually far
+                                # lower than what you pay for one, which is why the
+                                # dashboard never blends the two.
+
+network_cost_per_kwh: 0.0850    # Everything else billed per imported kWh: distribution,
+                                # transmission, levies, energy taxes. Excluding VAT. Find
+                                # it on an invoice: total variable charges ÷ kWh billed,
+                                # minus the energy price above. On many bills this is
+                                # comparable to the energy itself.
+network_cost_low_per_kwh: 0     # The same on the night tariff, where distribution is
+                                # metered per register. Leave 0 to use the day figure.
+
+vat_pct: 21                     # Applied to energy and network together. Set 0 if you
+                                # reclaim VAT, or if your prices already include it.
+
+capacity_tariff_per_kw_year: 0  # For grids billing peak demand rather than energy, such
+                                # as the Belgian capaciteitstarief. Currency units per kW
+                                # of monthly peak per year. 0 disables the estimate.
+currency: EUR                   # EUR, USD and GBP print a symbol; anything else its code.
+
+# ─── The smart-meter cross-check ─────────────────────────────────────────────────
+# Optional, and only if Home Assistant already reads your utility meter — a P1 dongle,
+# DSMR, HomeWizard, or similar. Two independent measurements of the same connection give
+# the only honest error bar on either, and where the utility meter is readable it is the
+# one the money uses, because it is the one that gets billed.
+#
+# Entity IDs are typed in full, domain included. Yours will be named differently; look
+# them up in Developer Tools → States. Every list here is a repeating field.
+#
+# Three shapes are supported. Fill in whichever your integration provides:
+#   1. one signed sensor          → p1_net_power
+#   2. separate import and export → p1_import_power + p1_export_power  (DSMR)
+#   3. signed per phase           → p1_phase_power                     (HomeWizard)
+
+p1_net_power: sensor.p1_meter_active_power     # Positive importing, negative exporting.
+p1_import_power: ""             # Only if there is no signed total. Both or neither.
+p1_export_power: ""
+p1_phase_power: []              # Three signed per-phase sensors, L1 L2 L3.
+
+p1_phase_import:                # Or an import/export pair per phase. These are what catch
+  - sensor.p1_meter_active_power_l1_imported   # a reversed current clamp, which nets out
+  - sensor.p1_meter_active_power_l2_imported   # correctly in the totals and is invisible
+  - sensor.p1_meter_active_power_l3_imported   # there.
+p1_phase_export:
+  - sensor.p1_meter_active_power_l1_exported
+  - sensor.p1_meter_active_power_l2_exported
+  - sensor.p1_meter_active_power_l3_exported
+
+p1_import_energy:               # One per tariff register. They are summed, so list them
+  - sensor.p1_meter_energy_import_tariff_1     # all.
+  - sensor.p1_meter_energy_import_tariff_2
+p1_import_energy_low:           # The subset billed at the low tariff. Day import is
+  - sensor.p1_meter_energy_import_tariff_1     # taken as the remainder.
+p1_export_energy:
+  - sensor.p1_meter_energy_export_tariff_1
+  - sensor.p1_meter_energy_export_tariff_2
+
+p1_active_tariff: sensor.p1_meter_active_tariff
+p1_current_demand: sensor.p1_meter_active_demand_current_quarter_hour
+p1_peak_demand: sensor.p1_meter_active_demand_maximum_demand_current_month
+
+# ─── Changing inverter settings ──────────────────────────────────────────────────
+# Off by default, and inert without a password. With it on, the dashboard can save a
+# snapshot of what the inverter is currently set to and switch between saved snapshots
+# later — the seasonal change on a battery system, in one button. It never invents a
+# setting, only replays one it has seen, and always shows the diff before writing.
+#
+# Writes are refused unless the request arrives on the ingress port, which Home Assistant
+# connects to internally and which is never mapped onto the host, so the optional API port
+# cannot be used to change your inverter.
+
+control_enabled: false
+control_username: installer     # Huawei's local installer account. Almost always this.
+control_password: ""            # The local commissioning password, NOT your FusionSolar
+                                # cloud account.

@@ -1,0 +1,301 @@
+# Every field that expects a particular shape of value shows the exact text to type, not a
+# description of it. "For example 8 and 12" told a reader the values and left them to guess
+# whether the box wanted "8 and 12", "8,12" or two separate entries.
+configuration:
+  inverter_host:
+    name: Inverter address
+    description: >-
+      IP address or hostname of the inverter or its SDongle, typed like 192.168.1.50 —
+      no port, no http:// prefix. If you are unsure which device answers, start the add-on
+      anyway and read the Log tab: it says what it connected to and what it found. Failing
+      that, look for the Huawei entry in your router's list of connected devices.
+  inverter_port:
+    name: Modbus port
+    description: Almost always 502.
+  inverter_unit_id:
+    name: Modbus unit ID
+    description: >-
+      1 for an inverter behind an SDongle, 0 over the inverter's own WiFi access point.
+  site_name:
+    name: Site name
+    description: >-
+      Plain text, such as "Home" or "Barn roof". It names the device in Home Assistant and
+      prefixes every entity ID, so changing it later renames every entity. Pick one you
+      can live with.
+  log_level:
+    name: Log level
+    description: DEBUG logs every Modbus exchange, which is a lot.
+
+  live_interval:
+    name: Live poll interval (seconds)
+    description: >-
+      A number of seconds, such as 4. A live pass is three Modbus reads, each costing
+      about a second through an SDongle during production and less after dark, so four
+      leaves room for the other tiers. A tier that overruns stretches itself rather than
+      queueing.
+  slow_interval:
+    name: Slow poll interval (seconds)
+    description: >-
+      A number of seconds, such as 60. Covers lifetime counters, per-phase meter power
+      and battery configuration.
+  pack_interval:
+    name: Battery pack interval (seconds)
+    description: >-
+      A number of seconds, such as 300. Per-pack readings drift over weeks and are
+      recorded every five minutes, so reading them more often spends bus time for
+      nothing.
+  optimizer_enabled:
+    name: Read per-panel data
+    description: >-
+      Per-panel data comes over the Modbus file extension and holds the bus for several
+      seconds. Turn off if that disrupts the live loop.
+  optimizer_interval:
+    name: Per-panel interval (seconds)
+    description: >-
+      A number of seconds, such as 300. The per-panel file is slow to read, so this is
+      deliberately far apart.
+
+  history_full_days:
+    name: Full-resolution history (days)
+    description: >-
+      A whole number of days, such as 7. Days of untouched samples before they are
+      averaged to one a minute: one day keeps today examinable in full detail, and beyond
+      that a minute is finer than the question usually asked. A week costs roughly 7 MB a
+      year.
+  history_minute_days:
+    name: One-minute history (days)
+    description: >-
+      A whole number of days, such as 90. How far back a past day can still be seen at
+      real resolution, before readings are averaged to one an hour. A year costs roughly
+      23 MB.
+
+  mqtt_enabled:
+    name: Publish to MQTT
+    description: >-
+      Creates the Home Assistant entities. Turn it off to run the dashboard and API only,
+      which is what you want if you already run a broker for other devices and do not want
+      another few dozen entities appearing in Home Assistant. The Supervisor supplies the
+      broker details, so nothing else needs setting.
+  mqtt_discovery_prefix:
+    name: MQTT discovery prefix
+    description: >-
+      Leave it at "homeassistant" unless your Home Assistant is configured with a different
+      one, which happens where two Home Assistant instances share a broker. It has to match
+      exactly, or the entities are published where nothing is listening.
+
+  string_panel_counts:
+    name: Panels per string
+    description: >-
+      One entry per string, in string order. This is a repeating field, so for 8 panels
+      on the first string and 12 on the second you add "8" and then add "12" — two
+      separate entries, not "8, 12" typed into one box. Without it, comparing strings is
+      meaningless: a bigger string produces more, which says nothing about panel health.
+  string_labels:
+    name: String names
+    description: >-
+      One entry per string, in the same order as the panel counts, added one at a time:
+      add "East", then add "West". Each becomes that string's name everywhere in place of
+      "String 1".
+  panel_watts:
+    name: Watts per panel
+    description: >-
+      Nameplate watts of one panel as a whole number, such as 410. With the panel counts
+      this gives the array's peak capacity, which is what the Solar tile's bar is measured
+      against. Leave at 0 and the inverter's own rated power is used instead.
+  optimizer_string:
+    name: String carrying the optimizers (fallback)
+    description: >-
+      Leave at 0. The inverter reports which string each optimizer is on, including arrays
+      with optimizers on more than one string, and that is used in preference to this. Set
+      it only if the panel view says nothing about strings, which means this inverter's
+      firmware does not report the wiring.
+
+  backup_present:
+    name: Backup Box fitted
+    description: >-
+      Leave at "auto". A Backup Box is detected by reading the backup reserve, which an
+      owner who set theirs to 0% will fail — set "yes" in that case. Set "no" to suppress
+      the backup entities on a system that has no Backup Box but reports a stale reserve.
+
+  energy_price_per_kwh:
+    name: Import price, day tariff
+    description: >-
+      Price of one kWh in whole currency units rather than cents: for 24.5 cents type
+      0.245, not 24.5. Leave at 0 to omit money figures entirely.
+  low_tariff_price_per_kwh:
+    name: Import price, low tariff
+    description: >-
+      Whole currency units per kWh, such as 0.21000. Falls back to the day price when
+      left at 0. Matters on a site that charges the battery from the grid overnight, where
+      most import lands on the low tariff.
+  feed_in_price_per_kwh:
+    name: Feed-in price
+    description: >-
+      Whole currency units per kWh, such as 0.05000. Kept separate from the import
+      price: self-consumed solar saves the retail price, exported solar earns this one,
+      and blending them flatters the export side.
+  network_cost_per_kwh:
+    name: Network costs and levies, per kWh
+    description: >-
+      Everything billed per imported kWh that is not the energy itself -- distribution,
+      transmission and levies -- in whole currency units, excluding VAT. For example
+      0.08500. On many bills this is comparable to the energy itself, so leaving it at 0
+      understates both what importing costs and what avoiding it saves. To find yours,
+      take a monthly invoice, divide the total variable charges by the kWh billed, and
+      subtract your energy price.
+  network_cost_low_per_kwh:
+    name: Network costs and levies, low tariff
+    description: >-
+      The same, for kilowatt-hours billed at the low tariff, for example 0.07800.
+      Distribution is metered per register, so a dual-tariff meter is charged a lower
+      distribution rate at night as well as a lower energy rate. Leave at 0 to use the day
+      figure for both.
+  vat_pct:
+    name: VAT on electricity (%)
+    description: >-
+      A whole percentage applied to energy and network together, for example 6 in Belgium
+      or 21 in the Netherlands. Leave at 0 if your prices already include it.
+  capacity_tariff_per_kw_year:
+    name: Capacity tariff, per kW per year
+    description: >-
+      Currency units per kW of monthly peak per year, such as 44.19. For tariffs billed
+      on peak demand rather than energy, like the Belgian capaciteitstarief. Set 0 to
+      disable the estimate.
+  currency:
+    name: Currency
+    description: >-
+      A three-letter code, such as EUR. EUR, USD and GBP print their symbol; anything
+      else prints the code itself.
+
+  p1_net_power:
+    name: P1 net grid power
+    description: >-
+      One Home Assistant entity ID, typed in full including the domain — for instance
+      "sensor.p1_meter_active_power". It must be a single signed value: positive
+      importing, negative exporting. This is a second, independent measurement of the grid
+      connection, used to cross-check the inverter's own meter.
+  p1_import_power:
+    name: P1 import power (if there is no net sensor)
+    description: >-
+      Only for integrations that publish no signed total, such as Home Assistant's DSMR
+      one. One entity ID for the importing direction, such as "sensor.power_consumption".
+      Both this and the export sensor must be set, or neither.
+  p1_export_power:
+    name: P1 export power (if there is no net sensor)
+    description: >-
+      The other half of the pair, such as "sensor.power_production". Leave both empty if
+      you filled in the net grid power sensor above.
+  p1_phase_power:
+    name: P1 per-phase power, signed
+    description: >-
+      For meters reporting each phase as one signed value rather than an import/export
+      pair, such as HomeWizard. Three entity IDs added one at a time in L1 L2 L3 order,
+      starting with "sensor.active_power_l1_w". Use this or the import/export pair below,
+      not both.
+  p1_phase_import:
+    name: P1 per-phase import
+    description: >-
+      Three entity IDs, added one at a time in L1 L2 L3 order: first
+      "sensor.p1_meter_active_power_l1", then the l2 one, then the l3 one. These are what
+      catch a reversed current clamp, which nets out correctly in the totals and so is
+      invisible there.
+  p1_phase_export:
+    name: P1 per-phase export
+    description: >-
+      Three entity IDs in the same order, added one at a time: for instance
+      "sensor.p1_meter_active_power_returned_l1" and its l2 and l3 siblings. Leave empty
+      if your P1 integration reports each phase as a single signed value instead.
+  p1_import_energy:
+    name: P1 import counters
+    description: >-
+      One entity ID per tariff register, added one at a time: for instance
+      "sensor.p1_meter_energy_import_tariff_1", then the tariff_2 one. They are summed, so
+      list every register that bills as import.
+  p1_import_energy_low:
+    name: P1 low-tariff import counters
+    description: >-
+      The subset of the above billed at the low tariff, added one at a time — often just
+      the one, "sensor.p1_meter_energy_import_tariff_1". Day import is taken as the
+      remainder.
+  p1_export_energy:
+    name: P1 export counters
+    description: >-
+      One entity ID per tariff register, added one at a time, such as
+      "sensor.p1_meter_energy_export_tariff_1". They are summed.
+  p1_active_tariff:
+    name: P1 active tariff
+    description: >-
+      One entity ID whose state says which tariff is currently running, such as
+      "sensor.p1_meter_active_tariff".
+  p1_current_demand:
+    name: P1 current average demand
+    description: >-
+      One entity ID, such as
+      "sensor.p1_meter_active_demand_current_quarter_hour". The quarter-hour average a
+      capacity tariff is billed on.
+  p1_peak_demand:
+    name: P1 peak demand this month
+    description: >-
+      One entity ID, such as
+      "sensor.p1_meter_active_demand_maximum_demand_current_month".
+
+  control_enabled:
+    name: Allow writing to the inverter
+    description: >-
+      Off by default and inert without a password. Applying a saved profile always shows
+      what would change and waits for confirmation; nothing here acts on its own.
+  control_username:
+    name: Installer username
+    description: >-
+      Huawei's local installer account, which is almost always exactly "installer".
+  control_password:
+    name: Installer password
+    description: >-
+      The local password used when commissioning the inverter, not the FusionSolar cloud
+      account password.
+
+  inverter_timeout:
+    name: Modbus timeout
+    description: >-
+      Seconds to wait for a reply before giving up on a read, for example 10. Raise it if
+      the log shows timeouts on a slow or distant SDongle.
+  inverter_cooldown:
+    name: Pause between requests
+    description: >-
+      Seconds to wait between Modbus requests, for example 0.05. Some SDongles drop the
+      connection when pushed; raising this toward 0.5 is the usual cure.
+  grid_import_is_positive:
+    name: Meter counts import as positive
+    description: >-
+      Leave off unless your meter is wired the other way round. The symptom is a house
+      load that goes negative, which the dashboard warns about.
+  mqtt_host:
+    name: MQTT broker address
+    description: >-
+      Leave empty. As an add-on the Supervisor supplies the broker and its credentials.
+      Fill this in only to reach a broker the Supervisor does not know about, for example
+      192.168.1.10.
+  mqtt_port:
+    name: MQTT broker port
+    description: Only with a broker address above. Usually 1883, or 8883 over TLS.
+  mqtt_username:
+    name: MQTT username
+    description: Only with a broker address above. Leave empty for the Supervisor's broker.
+  mqtt_password:
+    name: MQTT password
+    description: Only with a broker address above. Leave empty for the Supervisor's broker.
+  home_assistant_url:
+    name: Home Assistant address
+    description: >-
+      Leave empty. As an add-on the Supervisor is reached without an address. Fill this in
+      only when running outside Home Assistant, for example http://192.168.1.10:8123.
+  home_assistant_token:
+    name: Home Assistant token
+    description: >-
+      Leave empty. As an add-on the Supervisor grants access without a token. Needed only
+      alongside an address above; create one at Profile → Security → Long-lived access
+      tokens.
+network:
+  8480/tcp: >-
+    JSON API, event stream and Prometheus metrics. Optional: the dashboard is served
+    through ingress and needs no port.

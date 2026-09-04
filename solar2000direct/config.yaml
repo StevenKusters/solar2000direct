@@ -1,0 +1,150 @@
+name: solar2000direct
+version: "1.0.0"
+slug: solar2000direct
+description: Real-time telemetry read locally from Huawei SUN2000 inverters over Modbus TCP
+url: https://github.com/StevenKusters/solar2000direct
+arch:
+  - aarch64
+  - amd64
+init: false
+boot: auto
+startup: application
+
+# The dashboard is served inside Home Assistant's own UI, authenticated by Home
+# Assistant, with no port exposed on the host.
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:solar-power-variant
+panel_title: Solar
+
+# Grants a SUPERVISOR_TOKEN, which reaches the core API through the Supervisor proxy.
+# This is what removes the need for a long-lived access token to read the P1 meter.
+homeassistant_api: true
+
+# "want" rather than "need": the add-on runs without a broker, it just cannot publish
+# entities to Home Assistant. The Supervisor supplies the credentials when one exists.
+services:
+  - mqtt:want
+
+# Optional direct access to the JSON API and Prometheus metrics. Reads only over this
+# port: the two routes that write to the inverter answer on the ingress port instead,
+# which is not listed here and so cannot be mapped onto the host. Nothing in the add-on
+# authenticates a caller on its own, so which socket a request arrives on is what
+# separates a reader from a writer. Unmapped by default, since ingress serves the
+# dashboard already.
+ports:
+  "8480/tcp": null
+ports_description:
+  "8480/tcp": JSON API, event stream and Prometheus metrics (ingress serves the dashboard)
+
+options:
+  inverter_host: ""
+  inverter_port: 502
+  inverter_unit_id: 1
+  site_name: Solar
+  log_level: INFO
+
+  live_interval: 4
+  slow_interval: 60
+  pack_interval: 300
+  optimizer_enabled: true
+  optimizer_interval: 300
+
+  history_full_days: 1
+  history_minute_days: 90
+
+  mqtt_enabled: true
+  mqtt_discovery_prefix: homeassistant
+
+  string_panel_counts: []
+  string_labels: []
+  panel_watts: 0
+  optimizer_string: 0
+  backup_present: auto
+
+  energy_price_per_kwh: 0
+  low_tariff_price_per_kwh: 0
+  feed_in_price_per_kwh: 0
+  network_cost_per_kwh: 0
+  network_cost_low_per_kwh: 0
+  vat_pct: 0
+  capacity_tariff_per_kw_year: 0
+  currency: EUR
+
+  p1_net_power: ""
+  p1_import_power: ""
+  p1_export_power: ""
+  p1_phase_power: []
+  p1_phase_import: []
+  p1_phase_export: []
+  p1_import_energy: []
+  p1_import_energy_low: []
+  p1_export_energy: []
+  p1_active_tariff: ""
+  p1_current_demand: ""
+  p1_peak_demand: ""
+
+  control_enabled: false
+  control_username: installer
+  control_password: ""
+
+schema:
+  inverter_host: str
+  inverter_port: int(1,65535)
+  inverter_unit_id: int(0,247)
+  inverter_timeout: int(1,120)?
+  inverter_cooldown: float?
+  site_name: str
+  log_level: list(DEBUG|INFO|WARNING|ERROR)
+  live_interval: float
+  slow_interval: float
+  pack_interval: float
+  optimizer_interval: float
+  optimizer_enabled: bool
+  panel_watts: int(0,1000)
+  optimizer_string: int(0,24)
+  backup_present: list(auto|yes|no)
+  grid_import_is_positive: bool?
+  string_panel_counts:
+    - int
+  string_labels:
+    - str
+  energy_price_per_kwh: float
+  low_tariff_price_per_kwh: float
+  feed_in_price_per_kwh: float
+  network_cost_per_kwh: float
+  network_cost_low_per_kwh: float
+  vat_pct: float
+  capacity_tariff_per_kw_year: float
+  currency: str
+  p1_net_power: str
+  p1_import_power: str
+  p1_export_power: str
+  p1_phase_power:
+    - str
+  p1_phase_import:
+    - str
+  p1_phase_export:
+    - str
+  p1_import_energy:
+    - str
+  p1_import_energy_low:
+    - str
+  p1_export_energy:
+    - str
+  p1_active_tariff: str
+  p1_current_demand: str
+  p1_peak_demand: str
+  history_full_days: int(1,365)
+  history_minute_days: int(1,3650)
+  mqtt_enabled: bool
+  mqtt_discovery_prefix: str
+  mqtt_host: str?
+  mqtt_port: int(1,65535)?
+  mqtt_username: str?
+  mqtt_password: password?
+  home_assistant_url: str?
+  home_assistant_token: password?
+  control_enabled: bool
+  control_username: str
+  control_password: password?

@@ -1,0 +1,1705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>solar2000direct</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --line:#dfe3e8; --ink:#1a1d21; --muted:#6b7280;
+  --pv:#e8a33d; --battery:#4a9d5f; --grid:#5b7fc7; --house:#8b6bb1; --warn:#c9563c;
+  --shadow:0 1px 3px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#15171a; --panel:#1d2024; --line:#2b2f35; --ink:#e6e8ea; --muted:#8b929c;
+        --shadow:0 1px 3px rgba(0,0,0,.4);}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+     font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+       padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+h1{font-size:16px;margin:0;font-weight:650;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:12px}
+.badge{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--battery)}
+.dot.stale{background:var(--pv)} .dot.down{background:var(--warn)}
+/* Stale readings are the dangerous kind: they are self-consistent and look current. The
+   badge alone is too quiet for that, so silence gets a strip across the top. */
+.stalebar{padding:10px 20px;background:color-mix(in srgb,var(--warn) 14%,var(--panel));
+  color:var(--ink);font-size:13px;border-bottom:1px solid var(--line)}
+.stalebar b{font-weight:600}
+/* minmax(0,1fr) rather than the default 1fr: a grid column is sized to its widest child's
+   minimum content, so one unbreakable row anywhere -- a chart legend, a wide table --
+   silently widens every card on the page and the whole document scrolls sideways. */
+main{padding:20px;max-width:1180px;margin:0 auto;display:grid;gap:16px;
+     grid-template-columns:minmax(0,1fr)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+      padding:16px;box-shadow:var(--shadow);min-width:0}
+@media(max-width:640px){
+  main{padding:12px;gap:12px}
+  .card{padding:13px}
+  header{padding:12px 14px}
+}
+.card h2{font-size:11px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.row{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+.row>*{min-width:0}
+@media(min-width:900px){
+  .row.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .row.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:14px;min-width:0}
+.tile .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.tile .value{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tile .unit{font-size:13px;color:var(--muted);font-weight:400;margin-left:2px}
+.bar{height:7px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:7px}
+.bar>i{display:block;height:100%;border-radius:4px;transition:width .4s ease}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);font-size:13px}
+th:first-child,td:first-child{text-align:left;color:var(--muted);font-weight:500}
+th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+tr:last-child td{border-bottom:none}
+.panels{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:6px}
+.panel{border:1px solid var(--line);border-radius:7px;padding:7px;text-align:center;font-size:11px}
+.panel .w{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.panel .t{color:var(--muted);font-size:10px}
+.muted{color:var(--muted)} .warn{color:var(--warn)}
+.note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.45}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;background:var(--bg);
+  padding:3px;border-radius:8px;width:fit-content;max-width:100%}
+.tabs button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;
+  padding:5px 15px;border-radius:6px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
+.donuttitle{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;
+  font-weight:600;margin-bottom:6px}
+.donutrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.donutrow svg{width:112px;height:112px;flex:none}
+.legend{font-size:12px;display:grid;gap:5px;min-width:0}
+.legend div{display:flex;align-items:baseline;gap:7px}
+.sourceoffer{max-width:1180px;margin:0 auto;padding:16px 20px 28px;color:var(--muted);
+  font-size:12px}
+.sourceoffer a{color:var(--muted)}
+.chartkey{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;min-width:0}
+.chartkey div{display:flex;align-items:center;gap:6px}
+/* The key is a row of switches. A series that has been put away stays listed -- there
+   would otherwise be no way to bring it back -- but reads as off rather than as absent. */
+.chartkey button{display:flex;align-items:center;gap:6px;appearance:none;background:none;
+  border:0;padding:1px 0;margin:0;font:inherit;color:inherit;cursor:pointer;border-radius:4px}
+.chartkey button:hover{opacity:.7}
+.chartkey button:focus-visible{outline:2px solid var(--grid);outline-offset:2px}
+.chartkey button.off{opacity:.45}
+.chartkey button.off .swatch{background:var(--muted) !important;opacity:.5}
+.chartkey button.off .muted{text-decoration:line-through}
+.swatch{width:9px;height:9px;border-radius:2px;flex:none}
+.legend b{font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);font-size:12px;padding:18px 0}
+tr.trusted td{background:color-mix(in srgb, var(--battery) 12%, transparent)}
+.verdict{font-size:13px;font-weight:600;padding:8px 12px;border-radius:7px;margin-top:10px}
+.verdict.yes{background:color-mix(in srgb, var(--battery) 18%, transparent);color:var(--ink)}
+.verdict.no{background:color-mix(in srgb, var(--warn) 18%, transparent);color:var(--ink)}
+.share{display:grid;gap:4px;font-size:12px}
+.share .row2{display:grid;grid-template-columns:52px 1fr 44px;gap:8px;align-items:center}
+.share .track{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.share .track>i{display:block;height:100%;background:var(--warn);border-radius:3px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:13px;
+  padding:7px 15px;border-radius:7px;cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--battery);border-color:var(--battery);color:#fff;font-weight:600}
+.confirm{border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:12px;background:var(--bg)}
+.confirm ul{margin:8px 0;padding-left:18px;font-size:12px}
+.confirm code{font-size:11px}
+svg{width:100%;height:auto;display:block}
+.chartwrap{position:relative}
+.guide{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;opacity:.7}
+/* A bar already occupies a width, so a hairline through it says less than shading the
+   column it stands in. Drawn behind the bars, and taking in the axis label below them. */
+.barband{fill:var(--muted);opacity:.13;pointer-events:none}
+.guidedot{stroke:var(--panel);stroke-width:1.5}
+.charttip{position:absolute;top:6px;pointer-events:none;background:var(--panel);
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px;box-shadow:var(--shadow);
+  font-size:12px;display:none;z-index:5;white-space:nowrap}
+/* On a phone the box is nearly as wide as the chart, so floating it hides the very bar
+   being read. Below the chart it hides nothing, at the cost of the card growing. */
+.charttip.below{position:static;width:auto;margin-top:8px;white-space:normal}
+.charttip .line{gap:14px}
+.charttip .when{color:var(--muted);font-size:11px;margin-bottom:5px}
+.charttip .line{display:flex;align-items:center;gap:7px;justify-content:space-between}
+.charttip .line span:first-child{display:flex;align-items:center;gap:6px}
+.charttip b{font-variant-numeric:tabular-nums}
+.capture{fill:transparent;cursor:crosshair;touch-action:none}
+.selection{fill:var(--grid);opacity:.16;pointer-events:none}
+.seledge{stroke:var(--grid);stroke-width:1;opacity:.55;pointer-events:none}
+.zoomtag{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--grid);
+  background:color-mix(in srgb, var(--grid) 12%, transparent);padding:3px 9px;border-radius:99px}
+.zoomtag button{border:0;background:transparent;color:var(--grid);cursor:pointer;font:inherit;padding:0}
+.navrow{display:flex;align-items:center;gap:10px;margin:-4px 0 14px}
+.navrow button{border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  width:28px;height:28px;border-radius:7px;cursor:pointer;font:inherit;line-height:1}
+.navrow button:disabled{opacity:.35;cursor:default}
+.navrow .label{font-size:13px;font-weight:600}
+.navrow .today{border:0;background:transparent;color:var(--grid);width:auto;padding:0 6px;font-size:12px}
+.subhead{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  font-weight:600;margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
+.subhead .convention{text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px;opacity:.8}
+/* Dashes travelling along each path show which way the energy is going. Thickness alone
+   cannot distinguish a battery charging from one discharging, and that is the single
+   most important thing this diagram has to communicate. */
+.flow{stroke-dasharray:5 11;animation:flow 1.1s linear infinite}
+.flow.out{animation-direction:reverse}
+@keyframes flow{to{stroke-dashoffset:-16}}
+@media(prefers-reduced-motion:reduce){.flow{animation:none;stroke-dasharray:none}}
+.flowlabel{font-size:12px;font-weight:600;fill:var(--ink)}
+.flowsub{font-size:10px;fill:var(--muted)}
+/* On a narrow screen the diagram uses a smaller viewBox, so it is scaled down far less
+   and these sizes land close to their nominal pixels rather than at half of them. */
+.compactflow .flowlabel{font-size:15px}
+.compactflow .flowsub{font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="site">solar2000direct</h1>
+  <span class="sub" id="device">connecting…</span>
+  <span class="badge"><span class="dot down" id="dot"></span><span id="freshness">no data</span></span>
+</header>
+<div class="stalebar" id="stalebar" hidden></div>
+
+<main>
+  <section class="card">
+    <h2>Power flow</h2>
+    <svg id="flowsvg" viewBox="0 0 720 200" role="img" aria-label="Live energy flow">
+      <g id="flowlines" stroke-linecap="round" fill="none"></g>
+      <g id="flownodes"></g>
+    </svg>
+    <div class="note" id="flownote"></div>
+  </section>
+
+  <section class="card">
+    <h2>Now</h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="card">
+    <h2>Energy</h2>
+    <div class="tabs" id="periodtabs"></div>
+    <div class="navrow" id="periodnav"></div>
+    <div class="tiles" id="yieldtiles"></div>
+    <div class="row two" style="margin-top:16px">
+      <div><div class="donuttitle">Production</div><div id="proddonut"></div></div>
+      <div><div class="donuttitle">Consumption</div><div id="consdonut"></div></div>
+    </div>
+    <div id="chart" style="margin-top:16px"></div>
+    <div class="subhead" id="chart2head"></div>
+    <div id="chart2"></div>
+    <div class="note" id="energynote"></div>
+  </section>
+
+  <div class="row two">
+    <section class="card" id="card-strings">
+      <h2>Strings</h2>
+      <div class="tablewrap"><table id="strings"></table></div>
+      <div class="note" id="stringnote"></div>
+    </section>
+    <section class="card" id="card-battery">
+      <h2>Battery</h2>
+      <div class="tablewrap"><table id="battery"></table></div>
+      <div class="note" id="batterynote"></div>
+    </section>
+  </div>
+
+  <section class="card" id="card-phases">
+    <h2>Per-phase</h2>
+    <div class="tablewrap"><table id="phases"></table></div>
+    <div class="note" id="phasenote"></div>
+  </section>
+
+  <section class="card" id="card-mode">
+    <h2>Battery mode</h2>
+    <div class="tablewrap"><table id="modetable"></table></div>
+    <div id="modeactions" style="margin-top:14px"></div>
+    <div class="note" id="modenote"></div>
+  </section>
+
+  <section class="card" id="card-panels">
+    <h2>Panels</h2>
+    <div class="panels" id="panels"></div>
+    <div class="note" id="panelnote"></div>
+    <div class="tablewrap"><table id="panelhealth" style="margin-top:14px"></table></div>
+    <div class="note" id="panelhealthnote"></div>
+  </section>
+
+  <div class="row two">
+    <section class="card" id="card-packs">
+      <h2>Battery pack balance</h2>
+      <div class="tablewrap"><table id="packtable"></table></div>
+      <div id="packlowest" style="margin-top:12px"></div>
+      <div class="note" id="packnote"></div>
+    </section>
+    <section class="card" id="card-efficiency">
+      <h2>Battery round-trip</h2>
+      <div class="tiles" id="efficiencytiles"></div>
+      <div class="tablewrap"><table id="efficiencytable" style="margin-top:14px"></table></div>
+      <div class="note" id="efficiencynote"></div>
+    </section>
+  </div>
+
+  <div class="row two">
+    <section class="card" id="card-meters">
+      <h2>Meter cross-check</h2>
+      <div class="tablewrap"><table id="meters"></table></div>
+      <div class="note">The inverter's CT-clamp meter against the utility's fiscal meter.
+        They measure the same connection and will not agree exactly; a percent or two is
+        normal, a persistent gap of more than that means a clamp is miscalibrated or
+        reversed. Where the utility meter is readable, it is the one the money and the grid
+        figures use, because it is the one that is billed.</div>
+    </section>
+    <section class="card">
+      <h2>Collector</h2>
+      <div class="tablewrap"><table id="collector"></table></div>
+    </section>
+  </div>
+</main>
+
+<!-- AGPL section 13: anyone who uses this over a network is entitled to its source, so
+     the offer has to be on the thing they are using, not only in a file on GitHub. -->
+<footer class="sourceoffer">
+  solar2000direct — free software under the
+  <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener" target="_blank">AGPL-3.0</a>.
+  <a href="https://github.com/StevenKusters/solar2000direct" rel="noopener" target="_blank">Source</a>.
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const num = (v, d = 0) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(d);
+// Decided on the rounded figure, not the raw one: 999.6 W is under the threshold but
+// rounds to 1000, and printing "1000 W" where "1.00 kW" belongs looks like a bug.
+const kw = v => {
+  if (v === null || v === undefined) return "—";
+  const w = Math.round(v);
+  return Math.abs(w) >= 1000 ? (v / 1000).toFixed(2) + " kW" : w + " W";
+};
+
+function tile(label, value, unit, colour, frac) {
+  const bar = frac === undefined ? "" :
+    `<div class="bar"><i style="width:${Math.max(0, Math.min(100, frac * 100))}%;background:${colour}"></i></div>`;
+  return `<div class="tile"><div class="label">${label}</div>
+          <div class="value" style="color:${colour || "inherit"}">${value}<span class="unit">${unit || ""}</span></div>${bar}</div>`;
+}
+
+function rows(el, data) {
+  el.innerHTML = data.map(r => Array.isArray(r)
+    ? `<tr><td>${r[0]}</td>${r.slice(1).map(c => `<td>${c}</td>`).join("")}</tr>`
+    : `<tr><th>${r.head.join("</th><th>")}</th></tr>`).join("");
+}
+
+// --- flow diagram -------------------------------------------------------------
+// Four sources arranged around a centre. Line thickness encodes magnitude, so the
+// dominant path is visible without reading a single number.
+// Two geometries. The wide one spreads the nodes out; the narrow one packs them into a
+// smaller viewBox, which matters because everything inside an SVG scales with it -- at 720
+// units wide inside a 340-pixel card, a 12-pixel label is drawn at under six.
+const FLOW_LAYOUTS = {
+  wide: {
+    w: 720, h: 200, centre: { x: 360, y: 100 }, offset: 20,
+    nodes: {
+      pv:      { x: 90,  y: 46,  label: "Solar",   colour: "var(--pv)" },
+      battery: { x: 90,  y: 154, label: "Battery", colour: "var(--battery)" },
+      grid:    { x: 630, y: 46,  label: "Grid",    colour: "var(--grid)" },
+      house:   { x: 630, y: 154, label: "House",   colour: "var(--house)" },
+    },
+  },
+  compact: {
+    w: 420, h: 250, centre: { x: 210, y: 125 }, offset: 14,
+    nodes: {
+      pv:      { x: 86,  y: 46,  label: "Solar",   colour: "var(--pv)" },
+      battery: { x: 86,  y: 204, label: "Battery", colour: "var(--battery)" },
+      grid:    { x: 330, y: 46,  label: "Grid",    colour: "var(--grid)" },
+      house:   { x: 330, y: 204, label: "House",   colour: "var(--house)" },
+    },
+  },
+};
+
+function flowLayout() {
+  const svg = $("flowsvg");
+  const width = svg ? svg.clientWidth || svg.getBoundingClientRect().width : 0;
+  return width && width < 520 ? "compact" : "wide";
+}
+
+// Which nodes this installation actually has. The house is only knowable through a meter,
+// so a meterless site has no house figure to draw either.
+function fitted(key) {
+  if (key === "battery") return lastCapabilities.has("battery_1");
+  if (key === "grid" || key === "house") return lastCapabilities.has("meter");
+  return true;
+}
+
+function drawFlow(d) {
+  const svg = $("flowsvg");
+  const which = flowLayout();
+  const L = FLOW_LAYOUTS[which];
+  svg.setAttribute("viewBox", `0 0 ${L.w} ${L.h}`);
+  svg.classList.toggle("compactflow", which === "compact");
+  const NODES = L.nodes, CENTRE = L.centre;
+
+  // Text inside an SVG scales with the SVG, so on a wide screen the labels grow without
+  // limit and collide with geometry sized for smaller ones. Sizing them in viewBox units
+  // derived from the measured scale keeps them at a fixed size on screen at any width.
+  const drawn = svg.clientWidth || svg.getBoundingClientRect().width || L.w;
+  const scale = drawn / L.w;
+  const labelSize = (13 / scale).toFixed(2);
+  const valueSize = (11.5 / scale).toFixed(2);
+
+  const flows = [
+    { from: "pv",      value: d.pv_power_w || 0 },
+    { from: "battery", value: d.battery_discharge_w || 0 },
+    { from: "battery", value: -(d.battery_charge_w || 0) },
+    { from: "grid",    value: d.grid_import_w || 0 },
+    { from: "grid",    value: -(d.grid_export_w || 0) },
+    { from: "house",   value: -(d.house_load_w || 0) },
+  ].filter(f => Math.abs(f.value) > 5);
+
+  const peak = Math.max(1000, ...flows.map(f => Math.abs(f.value)));
+  $("flowlines").innerHTML = flows.map(f => {
+    const n = NODES[f.from];
+    const width = 1.5 + 9 * (Math.abs(f.value) / peak);
+    const opacity = 0.30 + 0.55 * (Math.abs(f.value) / peak);
+    const mx = (n.x + CENTRE.x) / 2;
+    // A positive value flows toward the inverter (producing, discharging, importing);
+    // a negative one flows away from it (charging, exporting, consuming).
+    const direction = f.value > 0 ? "" : " out";
+    return `<path class="flow${direction}"
+             d="M${n.x} ${n.y} C ${mx} ${n.y}, ${mx} ${CENTRE.y}, ${CENTRE.x} ${CENTRE.y}"
+             stroke="${n.colour}" stroke-width="${width.toFixed(1)}" opacity="${opacity.toFixed(2)}"/>`;
+  }).join("");
+
+  const values = {
+    pv: d.pv_power_w, battery: d.battery_power_w,
+    grid: d.grid_power_w, house: d.house_load_w,
+  };
+  // A node for hardware that is not fitted is a labelled circle with a dash beside it and
+  // no line ever reaching it, which reads as a component that has stopped working.
+  $("flownodes").innerHTML = Object.entries(NODES).filter(([key]) => fitted(key)).map(([key, n]) => {
+    const v = values[key];
+    const onLeft = n.x < CENTRE.x;
+    // Labels grow away from their node. Anchoring them the other way puts the text on top
+    // of the circle as soon as it is wide enough, which is what happens on a big screen.
+    const anchor = onLeft ? "end" : "start";
+    const tx = onLeft ? n.x - L.offset : n.x + L.offset;
+    const lift = which === "compact" ? 4 : 2;
+    const drop = which === "compact" ? 17 : 14;
+    return `<circle cx="${n.x}" cy="${n.y}" r="${which === "compact" ? 8 : 9}" fill="${n.colour}"/>
+            <text x="${tx}" y="${n.y - lift}" class="flowlabel" text-anchor="${anchor}"
+                  style="font-size:${labelSize}px">${n.label}</text>
+            <text x="${tx}" y="${n.y + drop}" class="flowsub" text-anchor="${anchor}"
+                  style="font-size:${valueSize}px">${kw(v)}</text>`;
+  }).join("") +
+  `<circle cx="${CENTRE.x}" cy="${CENTRE.y}" r="${which === "compact" ? 11 : 13}" fill="var(--panel)"
+     stroke="var(--line)" stroke-width="2"/>`;
+}
+
+// --- render -------------------------------------------------------------------
+function render(s) {
+  const d = s.values || {}, stats = s.stats || {}, dev = s.device || {};
+  lastValues = d;
+  $("site").textContent = s.site || "solar2000direct";
+  $("device").textContent = [dev.model_name, dev.serial_number, s.status].filter(Boolean).join(" · ");
+
+  // The badge is drawn by its own clock rather than here. Written from render() it could
+  // only ever report freshness, never the absence of it: when the messages stopped so did
+  // the writing, and it froze at whatever it last said.
+  lastStats = stats;
+  lastMessageAt = lastSignalAt = Date.now();
+  freshness();
+
+  lastFlow = d;
+  drawFlow(d);
+  const served = d.instant_self_supply_pct;
+  $("flownote").textContent = served === undefined ? ""
+    : served > 0
+      ? `${num(served, 0)}% of current house load is being met without the grid.`
+      : "The house is running entirely on the grid right now."
+        + ((d.battery_charge_w || 0) > 50 ? " The grid is also charging the battery." : "");
+
+  // What this installation actually has, as reported by the inverter. Everything below
+  // follows it rather than the shape of the machine this was first written against: a
+  // permanently empty "String 2" row is not a smaller version of the truth, it is an MPPT
+  // the reader has no reason to believe is absent rather than broken.
+  const has = new Set(s.capabilities || []);
+  const shape = s.shape || { pv_strings: 2, battery_units: 0 };
+  lastShape = shape;
+  lastLabels = (s.array || {}).labels || [];
+  lastCapabilities = has;
+  show("card-battery", has.has("battery_1"));
+  show("card-mode", has.has("battery_1"));
+  show("card-packs", has.has("battery_1"));
+  show("card-efficiency", has.has("battery_1"));
+  show("card-panels", has.has("optimizers"));
+  show("card-meters", has.has("p1"));
+  show("card-phases", has.has("meter") || has.has("three_phase"));
+
+  // Against the array's own peak capacity where it is known, the inverter's rating
+  // otherwise. It used to be divided by 8600 -- the watt-peak of one particular roof.
+  const capacity = (s.array || {}).peak_w || d.rated_power || 10000;
+  $("tiles").innerHTML = [
+    tile("Solar", kw(d.pv_power_w), "", "var(--pv)", (d.pv_power_w || 0) / capacity),
+    ...(has.has("meter") ? [
+      tile("House load", kw(d.house_load_w), "", "var(--house)"),
+      tile("Grid", kw(d.grid_power_w), "", "var(--grid)"),
+    ] : []),
+    ...(has.has("battery_1") ? [
+      tile("Battery", kw(d.battery_power_w), "", "var(--battery)"),
+      tile("Battery level", num(d.storage_state_of_capacity ?? null, 1), "%", "var(--battery)",
+           (d.storage_state_of_capacity || 0) / 100),
+    ] : []),
+    tile("Inverter today", num(d.daily_yield_energy, 2), "kWh", "var(--pv)"),
+  ].join("");
+
+  const array = s.array || { labels: [], panel_counts: [] };
+  const stringRow = i => {
+    const panels = (array.panel_counts || [])[i - 1];
+    return [
+      (array.labels || [])[i - 1] || `String ${i}`,
+      panels ? `${panels} panels` : "—",
+      num(d[`pv_0${i}_voltage`], 1) + " V",
+      kw(d[`pv_string_${i}_power_w`]),
+      panels ? num(d[`pv_string_${i}_w_per_panel`], 0) + " W" : "—",
+      num(d[`cumulative_dc_energy_yield_mppt${i}`], 0) + " kWh",
+      panels ? num(d[`pv_string_${i}_kwh_per_panel`], 0) + " kWh" : "—",
+    ];
+  };
+  const strings = Array.from({ length: shape.pv_strings || 2 }, (_, i) => stringRow(i + 1));
+  rows($("strings"), [
+    { head: ["", "Panels", "Volts", "Power", "W/panel", "Lifetime", "kWh/panel"] },
+    ...strings,
+  ]);
+  const imbalance = d.string_imbalance_lifetime_pct;
+  const counted = (array.panel_counts || []).length > 0;
+  $("stringnote").innerHTML = imbalance !== undefined
+    ? `Lifetime spread between strings, per panel: <b>${num(imbalance, 1)}%</b>. Comparing raw
+       string totals would be meaningless when the strings hold different numbers of panels —
+       only the per-panel figure is diagnostic. A few percent is orientation; a step change is a fault.`
+    : counted
+      ? "The inverter reports volts and amps per MPPT but never watts. These are computed."
+      // The dashes in the per-panel columns are the question this answers.
+      : "The inverter reports volts and amps per MPPT but never watts, so the power columns are "
+        + "computed. The per-panel columns stay blank until it knows how many panels each string "
+        + "holds \u2014 it cannot work that out, because a string's size is not something it "
+        + "measures. " + setting("Panels per string",
+              "one entry per string, in string order. It is a repeating field, so for 12 panels "
+              + "on the first and 14 on the second you add \u201c12\u201d and then add "
+              + "\u201c14\u201d, rather than typing \u201c12, 14\u201d into one box.");
+
+  // A second unit's row on a one-cabinet site read "Unit 2 — % —" forever, which invites
+  // the owner to think a unit is fitted and faulty. The combined row is worth showing only
+  // when there is more than one thing being combined.
+  const units = Array.from({ length: shape.battery_units || 0 }, (_, i) => [
+    `Unit ${i + 1}`,
+    num(d[`storage_unit_${i + 1}_state_of_capacity`], 1) + " %",
+    kw(d[`storage_unit_${i + 1}_charge_discharge_power`]),
+  ]);
+  rows($("battery"), [
+    { head: ["", "Level", "Power"] },
+    ...(units.length > 1 ? units : []),
+    ["Battery", num(d.storage_state_of_capacity, 1) + " %", kw(d.battery_power_w)],
+  ]);
+  const spread = d.battery_pack_soc_spread_pct;
+  $("batterynote").innerHTML = d.battery_pack_count === 1
+    // One module has no siblings to drift from, so there is nothing to report and no
+    // reason to imply the readings are still coming.
+    ? `One battery module, at ${num(d.battery_pack_soc_mean_pct, 1)}%. Pack-to-pack drift,
+       the earliest sign of a failing module, needs more than one to compare.`
+    : spread === undefined ? "Waiting for pack detail."
+    : `${d.battery_pack_count} packs. SOC spread <b>${num(spread, 2)}%</b>, temperature spread
+       <b>${num(d.battery_pack_temp_spread_c, 1)}&nbsp;°C</b>, hottest ${num(d.battery_pack_temp_max_c, 1)}&nbsp;°C.
+       A pack drifting from its siblings is the earliest sign of a failing module.`;
+
+  const symmetric = d.injection_symmetric;
+  const phases = has.has("three_phase") ? ["A", "B", "C"] : ["A"];
+  rows($("phases"), [
+    { head: ["Phase", "Voltage", "Meter", "House load"] },
+    ...phases.map(p => [p,
+      num(d[`phase_${p}_voltage`], 1) + " V",
+      kw(d[`active_grid_${p}_power`]),
+      symmetric ? kw(d[`house_load_phase_${p}_w`]) : "—"]),
+  ]);
+  $("phasenote").textContent = symmetric
+    ? "The inverter is injecting symmetrically, so per-phase house load is a third of its output plus what the meter sees."
+    : symmetric === false ? "Injection is not symmetric right now, so per-phase house load cannot be separated from injection."
+    : "";
+
+  const info = s.optimizer_info || {}, live = s.optimizers || {};
+  const addresses = [...new Set([...Object.keys(info), ...Object.keys(live)])]
+    .sort((a, b) => Number(a) - Number(b));
+  const best = Math.max(1, ...addresses.map(a => (live[a] || {}).output_power || 0));
+  $("panels").innerHTML = addresses.map(a => {
+    const o = live[a] || {}, p = o.output_power;
+    const share = (p || 0) / best;
+    const bg = p === undefined ? "transparent"
+      : `color-mix(in srgb, var(--pv) ${Math.round(share * 70)}%, transparent)`;
+    return `<div class="panel" style="background:${bg}" title="${esc((info[a] || {}).sn || "")}">
+              <div class="t">#${a}</div><div class="w">${p === undefined ? "—" : Math.round(p)}</div>
+              <div class="t">${o.temperature === undefined ? "" : num(o.temperature, 0) + "°"}</div></div>`;
+  }).join("");
+  const optAge = stats.optimizer_age_s;
+  // Which strings carry optimizers is reported by the inverter, one entry per string, so
+  // an array with them on several strings -- or on all of them -- describes itself.
+  const optStrings = (array.optimizer_strings || [])
+    .map(n => (array.labels || [])[n - 1] || `string ${n}`);
+  const covering = optStrings.length === 0 ? ""
+    : optStrings.length === (shape.pv_strings || 0) ? " across every string"
+    // A label is often already a noun -- "West", but equally "West roof" or "String 2" --
+    // so the word is only added where it reads as an adjective would.
+    : optStrings.length === 1
+      ? ` on ${/string/i.test(optStrings[0]) ? optStrings[0] : `the ${optStrings[0]} string`}`
+    : ` on ${optStrings.slice(0, -1).join(", ")} and ${optStrings[optStrings.length - 1]}`;
+  $("panelnote").textContent = addresses.length
+    ? `${addresses.length} optimizers${covering}, watts each. `
+      + `Updated ${optAge === null || optAge === undefined ? "never" : num(optAge, 0) + "s ago"} — `
+      + "per-panel data is a slow file read, so it lags the rest."
+    : has.has("optimizers")
+      ? "The inverter reports optimizers but has sent no per-panel data yet. It arrives over a "
+        + "slow file read, so the first one can take a few minutes. If it never arrives, check "
+        + "that " + field("Read per-panel data") + " is on at " + SETTINGS_PATH + "."
+      : "This inverter reports no optimizers, so there is no per-panel data to read. Panels "
+        + "without optimizers cannot be measured individually \u2014 the string totals above "
+        + "are as fine as the hardware goes.";
+  renderPanelHealth();
+
+  const p1 = s.p1 || {};
+  rows($("meters"), [
+    { head: ["", "Huawei", "P1", "Delta"] },
+    ["Grid power", kw(d.grid_power_w), kw(p1.grid_power_w),
+      d.meter_delta_w === undefined ? "—" : kw(d.meter_delta_w)],
+    ["Imported (lifetime)", num(d.grid_accumulated_energy, 1) + " kWh",
+      num(p1.import_energy_kwh, 1) + " kWh", ""],
+    ["Exported (lifetime)", num(d.grid_exported_energy, 1) + " kWh",
+      num(p1.export_energy_kwh, 1) + " kWh", ""],
+    // Lifetime totals carry whatever happened before the clamp was fitted, so they are
+    // not a comparison. The selected period is: the same days, both meters.
+    ...(lastEnergy.grid_import_delta_kwh === undefined ? [] : [[
+      "Imported (this period)",
+      num(lastEnergy.grid_import_inverter_kwh, 2) + " kWh",
+      num(lastEnergy.grid_import_kwh, 2) + " kWh",
+      `<span class="${Math.abs(lastEnergy.grid_import_delta_kwh) > 0.5 ? "warn" : ""}">`
+        + `${lastEnergy.grid_import_delta_kwh > 0 ? "+" : ""}`
+        + `${num(lastEnergy.grid_import_delta_kwh, 2)} kWh</span>`]]),
+    ...(lastEnergy.grid_export_inverter_kwh === undefined ? [] : [[
+      "Exported (this period)",
+      num(lastEnergy.grid_export_inverter_kwh, 2) + " kWh",
+      num(lastEnergy.grid_export_kwh, 2) + " kWh",
+      num((lastEnergy.grid_export_kwh || 0) - lastEnergy.grid_export_inverter_kwh, 2) + " kWh"]]),
+    ...(p1.peak_demand_kw === undefined ? [] : [[
+      "Peak demand (month)", "—", num(p1.peak_demand_kw, 3) + " kW",
+      (s.pricing || {}).capacity_tariff_per_kw_year
+        ? `${(s.pricing || {}).symbol}${num(p1.peak_demand_kw * s.pricing.capacity_tariff_per_kw_year, 0)}/yr`
+        : ""]]),
+    ...(p1.current_demand_kw === undefined ? [] : [[
+      "Current demand", "—", num(p1.current_demand_kw, 3) + " kW", ""]]),
+  ]);
+
+  rows($("collector"), [
+    { head: ["", ""] },
+    ["Live cycle", num(stats.live_cycle_ms, 0) + " ms"],
+    ["Reads ok / failed", `${stats.reads_ok} / ${stats.reads_failed}`],
+    ["Reconnects", stats.reconnects],
+    ["Uptime", stats.uptime_s === null ? "—" : num(stats.uptime_s / 60, 1) + " min"],
+    ["Last error", stats.last_error ? `<span class="warn">${esc(stats.last_error)}</span>` : "none"],
+  ]);
+}
+
+// Home Assistant ingress serves this page under a generated path prefix, so every
+// request has to be relative to wherever the document actually lives. An absolute
+// "/api/live" would escape the prefix and 404.
+const BASE = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
+const url = path => BASE + path;
+
+// Hardware this installation does not have gets no card. An empty card is not a smaller
+// version of the truth: it reads as equipment that is fitted and silent.
+const show = (id, on) => { const el = $(id); if (el) el.hidden = !on; };
+
+// Anything that came off the wire and goes into innerHTML passes through here. Profile
+// names are chosen by whoever can reach the save endpoint, and this page is served from
+// the Home Assistant origin -- script injected here would run with the frontend's own
+// storage in reach, which is as bad as it sounds.
+const esc = value => String(value ?? "").replace(/[&<>"']/g,
+  ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+// A hint that names a setting has to say where it lives and what goes in it. "Set an
+// energy price in the add-on options" leaves a reader hunting for a field and then
+// guessing whether it wants euros or cents, which is a hundredfold error either way.
+const SETTINGS_PATH = "Settings \u2192 Add-ons \u2192 solar2000direct \u2192 Configuration";
+// Every option label quoted on this page goes through field(), so a test can check that
+// each one still exists in translations/en.yaml. A hint naming a setting by a label the
+// options page no longer uses sends the reader somewhere that is not there.
+const field = label => `\u201c${label}\u201d`;
+const setting = (label, what) => `${SETTINGS_PATH}, under ${field(label)}: ${what}`;
+let lastEnergy = {};
+let lastShape = { pv_strings: 2, battery_units: 0 };
+let lastLabels = [];
+let lastCapabilities = new Set();
+
+// --- battery mode -------------------------------------------------------------
+// A profile is a snapshot of what the inverter is actually set to, saved under a name.
+// Applying one is always a deliberate press, never automatic, and always preceded by
+// showing exactly what would change.
+let controlState = null;
+
+async function loadControl() {
+  try { controlState = await fetch(url("api/control")).then(r => r.json()); }
+  catch { controlState = null; }
+  renderControl();
+}
+
+function renderControl() {
+  if (!controlState || !controlState.available) {
+    $("modetable").innerHTML = "";
+    $("modeactions").innerHTML = "";
+    $("modenote").textContent = controlState?.error || "Not connected to the inverter.";
+    return;
+  }
+  const c = controlState.current || {};
+  const schedule = c.storage_huawei_luna2000_time_of_use_charging_and_discharging_periods || [];
+  rows($("modetable"), [
+    { head: ["", ""] },
+    ["Operation mode", `<b>${c.storage_working_mode_settings ?? "—"}</b>`],
+    ["Max grid charge power", c.storage_maximum_power_of_charge_from_grid === undefined
+      ? "—" : `${(c.storage_maximum_power_of_charge_from_grid / 1000).toFixed(2)} kW`],
+    ["Grid charge cutoff", num(c.storage_grid_charge_cutoff_state_of_charge, 1) + " %"],
+    ["Backup reserve", num(c.storage_backup_power_state_of_charge, 1) + " %"],
+    ["Peak shaving", c.storage_capacity_control_mode ?? "—"],
+    ["Schedule", schedule.length ? schedule.join("<br>") : "<span class='muted'>none</span>"],
+  ]);
+
+  const names = Object.keys(controlState.profiles || {});
+  const disabled = controlState.writes_enabled ? "" : "disabled";
+  $("modeactions").innerHTML = `<div class="actions">
+      ${names.map(n => `<button class="btn" data-apply="${esc(n)}" ${disabled}>Switch to ${esc(n)}</button>`).join("")}
+      <input id="savename" placeholder="Winter" style="padding:7px 10px;border-radius:7px;
+        border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:13px;width:110px">
+      <button class="btn" id="savebtn">Save current as…</button>
+    </div><div id="confirmbox"></div>`;
+
+  for (const b of document.querySelectorAll("[data-apply]")) b.onclick = () => proposeApply(b.dataset.apply);
+  $("savebtn").onclick = saveCurrent;
+
+  $("modenote").textContent = controlState.writes_enabled
+    ? "A profile stores whatever the inverter is set to right now. Set it up in the installer "
+      + "app once, type a name in the box \u2014 something like Winter or Summer, since a "
+      + "profile is a season rather than a setting \u2014 and save it. The buttons then switch "
+      + "between saved profiles, showing what would change before anything is written."
+    : "Read-only. To allow switching, go to " + SETTINGS_PATH
+      + ", turn on " + field("Allow writing to the inverter") + " and fill in "
+      + field("Installer password")
+      + " \u2014 the local password used when commissioning the inverter, not the FusionSolar "
+      + "cloud account. The username is almost always \u201cinstaller\u201d.";
+}
+
+async function saveCurrent() {
+  const name = ($("savename").value || "").trim();
+  if (!name) return;
+  const r = await fetch(url("api/control/save"), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  }).then(r => r.json());
+  $("confirmbox").innerHTML = r.error
+    ? `<div class="confirm warn">${esc(r.error)}</div>`
+    : `<div class="confirm">Saved <b>${esc(r.saved)}</b> — ${r.settings} settings and ${r.schedules} schedules.</div>`;
+  loadControl();
+}
+
+// Never apply straight from a click: show the diff first. Switching a grid-connected
+// inverter's working mode is not something to do by mis-tapping a button.
+async function proposeApply(name) {
+  $("confirmbox").innerHTML = `<div class="confirm">Checking what would change…</div>`;
+  const diff = await fetch(url(`api/control/diff?profile=${encodeURIComponent(name)}`)).then(r => r.json());
+  if (diff.error) { $("confirmbox").innerHTML = `<div class="confirm warn">${esc(diff.error)}</div>`; return; }
+  if (!diff.changes.length) {
+    $("confirmbox").innerHTML = `<div class="confirm">The inverter already matches <b>${esc(name)}</b>. Nothing to do.</div>`;
+    return;
+  }
+  $("confirmbox").innerHTML = `<div class="confirm">
+      Switching to <b>${esc(name)}</b> would change ${diff.changes.length} setting(s):
+      <ul>${diff.changes.map(c => `<li><code>${esc(c.register.replace(/^storage_/, ""))}</code>:
+        ${esc(JSON.stringify(c.current))} → <b>${esc(JSON.stringify(c.wanted))}</b></li>`).join("")}</ul>
+      <div class="actions"><button class="btn primary" id="confirmapply">Apply ${esc(name)}</button>
+      <button class="btn" id="cancelapply">Cancel</button></div></div>`;
+  $("cancelapply").onclick = () => { $("confirmbox").innerHTML = ""; };
+  $("confirmapply").onclick = async () => {
+    $("confirmbox").innerHTML = `<div class="confirm">Applying…</div>`;
+    const r = await fetch(url("api/control/apply"), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }).then(r => r.json());
+    $("confirmbox").innerHTML = r.error
+      ? `<div class="confirm warn">${esc(r.error)}</div>`
+      : `<div class="confirm">${r.ok ? "Applied" : "Partly applied"} <b>${esc(name)}</b>:
+         ${r.applied.length} written, ${(r.skipped || []).length} already correct
+         ${r.failed.length ? `, <span class="warn">${r.failed.length} failed</span>` : ""}.</div>`;
+    loadControl();
+  };
+}
+
+// --- battery pack balance ------------------------------------------------------
+// Spread must be read against the charge level it was measured at: on LFP's flat plateau
+// the BMS estimate is at its worst near the bottom, so a large spread down there says
+// little. Only a high-charge band is diagnostic, and it is marked as such.
+async function loadPacks() {
+  let d;
+  try { d = await fetch(url("api/packs")).then(r => r.json()); } catch { return; }
+
+  if (!d.measurable) {
+    $("packtable").innerHTML = ""; $("packlowest").innerHTML = "";
+    $("packnote").textContent = d.reason || "No pack readings yet.";
+    return;
+  }
+
+  const bands = d.bands || [];
+  $("packtable").innerHTML =
+    `<tr><th>Charge band</th><th>Mean</th><th>Readings</th><th>Level spread</th><th>Voltage spread</th></tr>` +
+    bands.map(b => {
+      const trusted = parseInt(b.soc_band, 10) >= 80;
+      return `<tr class="${trusted ? "trusted" : ""}">
+        <td>${b.soc_band}${trusted ? " <span class='muted'>&larr; diagnostic</span>" : ""}</td>
+        <td>${num(b.mean_soc_pct, 1)} %</td><td>${b.samples}</td>
+        <td>${num(b.soc_spread_pct, 2)} %</td><td>${num(b.voltage_spread_v, 3)} V</td></tr>`;
+    }).join("");
+
+  const share = d.lowest_pack_share || [];
+  const top = Math.max(1, ...share.map(s => s.share_pct));
+  $("packlowest").innerHTML = share.length
+    ? `<div class="label" style="font-size:11px;color:var(--muted);text-transform:uppercase;
+         letter-spacing:.05em;margin-bottom:6px">How often each pack sits lowest</div>
+       <div class="share">${share.map(s => `<div class="row2"><span>${s.pack}</span>
+         <span class="track"><i style="width:${100 * s.share_pct / top}%"></i></span>
+         <span style="text-align:right">${num(s.share_pct, 0)}%</span></div>`).join("")}</div>`
+    : "";
+
+  const worst = share[0];
+  $("packnote").innerHTML = d.balance_at_high_soc_pct !== undefined
+    ? `Imbalance at high charge: <b>${num(d.balance_at_high_soc_pct, 2)}%</b>. Measured where the
+       voltage curve steepens and the charge estimate is anchored, so this is the figure that means
+       something. ${worst && worst.share_pct > 50
+         ? `<b>${worst.pack}</b> sits lowest in ${num(worst.share_pct, 0)}% of readings, which is the
+            signature of a genuinely weak module rather than estimation noise.`
+         : "No single pack dominates the bottom position, which is what healthy looks like."}`
+    : `${d.reason || ""} Ranked by voltage rather than reported charge, because voltage is measured
+       and charge is inferred.`;
+}
+
+// --- battery round-trip --------------------------------------------------------
+// The number that decides whether overnight grid-charging pays: energy is bought at the
+// night price and delivered at some efficiency, so the day price must beat night divided
+// by that efficiency.
+async function loadEfficiency() {
+  let d;
+  try { d = await fetch(url("api/efficiency")).then(r => r.json()); } catch { return; }
+
+  if (!d.measurable) {
+    $("efficiencytiles").innerHTML = "";
+    rows($("efficiencytable"), []);
+    // Says what it is waiting for, not merely that it is waiting.
+    $("efficiencynote").textContent = d.reason
+      ? `No round-trip figure yet: ${d.reason}.`
+      : "Not enough history yet.";
+    return;
+  }
+
+  const headline = d.reliable ? d.system_round_trip_pct : d.battery_round_trip_pct;
+  $("efficiencytiles").innerHTML = [
+    tile("Round-trip", num(headline, 1), "%", "var(--battery)", (headline || 0) / 100),
+    tile("Needs day/night gap", num(d.required_day_night_gap_pct, 1), "%", "var(--grid)"),
+    ...(d.configured_day_night_gap_pct === undefined ? []
+      : [tile("Your tariff gap", num(d.configured_day_night_gap_pct, 1), "%", "var(--pv)")]),
+  ].join("");
+
+  rows($("efficiencytable"), [
+    { head: ["", ""] },
+    ["Charged into battery", num(d.charged_kwh, 1) + " kWh"],
+    ["Delivered from battery", num(d.discharged_kwh, 1) + " kWh"],
+    ["Losses over the window", num(d.losses_kwh, 1) + " kWh"],
+    ["Battery-only round-trip", num(d.battery_round_trip_pct, 1) + " %"],
+    ["Whole-system round-trip", num(d.system_round_trip_pct, 1) + " %"],
+    ["Sample coverage", num(d.coverage_pct, 0) + " %"],
+    // The window is whatever history exists up to a fortnight, so it has to be stated:
+    // a figure over two days and a figure over two weeks are not the same claim.
+    ["Measured over", d.since && d.until
+      ? `${num((d.until - d.since) / 86400, 1)} days` : "\u2014"],
+  ]);
+
+  let verdict = "";
+  if (d.night_charging_pays !== undefined) {
+    verdict = d.night_charging_pays
+      ? `<div class="verdict yes">Your ${num(d.configured_day_night_gap_pct, 1)}% tariff gap clears the
+         ${num(d.required_day_night_gap_pct, 1)}% this efficiency requires &mdash; overnight grid-charging
+         pays, though check what network costs do to the margin.</div>`
+      : `<div class="verdict no">Your ${num(d.configured_day_night_gap_pct, 1)}% tariff gap does not clear the
+         ${num(d.required_day_night_gap_pct, 1)}% this efficiency requires &mdash; overnight grid-charging
+         loses money at these prices.</div>`;
+  }
+  $("efficiencynote").innerHTML = verdict + (d.reliable
+    ? ""
+    : `<div style="margin-top:8px">${d.reason || ""}</div>`);
+}
+
+// --- per-panel health ---------------------------------------------------------
+// Absolute panel output moves with weather, season and time of day. What is diagnostic is
+// output relative to the panels beside it, which share all of that.
+let panelHealth = null;
+
+async function loadPanelHealth() {
+  try { panelHealth = await fetch(url("api/panels")).then(r => r.json()); }
+  catch { panelHealth = null; }
+  renderPanelHealth();
+}
+
+function renderPanelHealth() {
+  if (!panelHealth || !(panelHealth.panels || []).length) {
+    $("panelhealth").innerHTML = "";
+    $("panelhealthnote").textContent =
+      "Per-panel comparison appears once a few days of readings have accumulated.";
+    return;
+  }
+  const ranked = [...panelHealth.panels].sort((a, b) => a.relative - b.relative);
+  // Anything within a couple of percent of its neighbours is noise, not a finding.
+  const notable = ranked.filter(p => p.deviation_pct <= -2).slice(0, 5);
+  rows($("panelhealth"), [
+    { head: ["Panel", "vs siblings", "Mean", "Peak", "Temp", "Serial"] },
+    ...(notable.length ? notable : ranked.slice(0, 3)).map(p => [
+      `#${p.address}`,
+      `<span class="${p.deviation_pct <= -3 ? "warn" : ""}">${p.deviation_pct > 0 ? "+" : ""}${num(p.deviation_pct, 1)}%</span>`,
+      num(p.mean_power_w, 0) + " W",
+      num(p.peak_power_w, 0) + " W",
+      p.mean_temperature_c === null ? "—" : num(p.mean_temperature_c, 0) + " °C",
+      `<span class="muted">${esc(p.sn || "")}</span>`,
+    ]),
+  ]);
+  // Which median a panel was measured against changes what a gap means, so say it.
+  const within = panelHealth.compared_within_string
+    ? "the other panels on its own string"
+    : "the whole array";
+  $("panelhealthnote").innerHTML = notable.length
+    ? `Panel <b>#${panelHealth.worst}</b> is running <b>${num(panelHealth.worst_deviation_pct, 1)}%</b>
+       below the median of ${within} over the last 7 days. A few percent is tolerance; a
+       persistent gap is soiling, shading or a failing panel.`
+    : `All panels within 2% of the median of ${within} over the last 7 days
+       (${panelHealth.samples} daylight readings). Compared against the median rather than the
+       mean, so one bad panel cannot drag the baseline down and hide itself.`;
+}
+
+// --- energy: periods, donuts and charts ---------------------------------------
+const PERIODS = [
+  { key: "day", label: "Day" },
+  { key: "month", label: "Month" },
+  { key: "year", label: "Year" },
+  { key: "lifetime", label: "Lifetime" },
+];
+let period = "day";
+let periodOffset = 0;      // 0 = the current period, -1 = the one before it
+let zoom = null;           // {since, until} when a range has been selected on a chart
+
+function applyZoom(since, until) {
+  zoom = { since, until };
+  renderNav();
+  loadEnergy();
+}
+function clearZoom() {
+  if (!zoom) return;
+  zoom = null;
+  renderNav();
+  loadEnergy();
+}
+let lastValues = {};
+
+// Calendar-aligned in local time, and steppable. A month is a month, not thirty days, and
+// "last month" is a calendar month back rather than thirty days back.
+function periodWindow(key, offset) {
+  const now = new Date();
+  let start, end, label;
+  if (key === "day") {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+    label = offset === 0 ? "Today"
+      : start.toLocaleDateString([], { weekday: "short", day: "numeric", month: "long" });
+  } else if (key === "month") {
+    start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1);
+    label = start.toLocaleDateString([], { month: "long", year: "numeric" });
+  } else if (key === "year") {
+    start = new Date(now.getFullYear() + offset, 0, 1);
+    end = new Date(now.getFullYear() + offset + 1, 0, 1);
+    label = String(start.getFullYear());
+  } else {
+    return { since: 0, until: Math.floor(now / 1000), label: "Lifetime", atNow: true };
+  }
+  return {
+    since: Math.floor(start.getTime() / 1000),
+    // Never ask for the future: a period still running ends now, not at its calendar end.
+    until: Math.min(Math.floor(end.getTime() / 1000), Math.floor(now.getTime() / 1000)),
+    label,
+    atNow: offset === 0,
+  };
+}
+
+function renderNav() {
+  const nav = $("periodnav");
+  if (period === "lifetime") { nav.innerHTML = ""; return; }
+  const w = periodWindow(period, periodOffset);
+  const zoomTag = zoom
+    ? `<span class="zoomtag">${new Date(zoom.since * 1000).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
+        &ndash; ${new Date(zoom.until * 1000).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
+        <button id="navunzoom" title="Clear zoom">&times;</button></span>`
+    : "";
+  nav.innerHTML = `<button id="navprev" title="Earlier">&lsaquo;</button>
+    <span class="label">${w.label}</span>
+    <button id="navnext" title="Later" ${w.atNow ? "disabled" : ""}>&rsaquo;</button>
+    ${w.atNow ? "" : `<button class="today" id="navtoday">back to now</button>`}
+    ${zoomTag}`;
+  // Stepping or clearing the zoom both reset the other, since a zoom belongs to the
+  // period it was taken from.
+  $("navprev").onclick = () => { periodOffset -= 1; zoom = null; renderNav(); loadEnergy(); };
+  $("navnext").onclick = () => { periodOffset = Math.min(0, periodOffset + 1); zoom = null; renderNav(); loadEnergy(); };
+  if ($("navtoday")) $("navtoday").onclick = () => { periodOffset = 0; zoom = null; renderNav(); loadEnergy(); };
+  if ($("navunzoom")) $("navunzoom").onclick = clearZoom;
+}
+
+function donut(parts, total, unit) {
+  const size = 112, r = 44, c = 2 * Math.PI * r;
+  let offset = 0;
+  const arcs = parts.filter(p => p.value > 0).map(p => {
+    const frac = total > 0 ? p.value / total : 0;
+    // Same `into` convention as the charts: a pair sharing one colour is told apart by
+    // weight, so "stored in the battery" sits beside "used in the house" as one quantity
+    // going two ways rather than as two unrelated ones.
+    const seg = `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${p.colour}"
+       stroke-width="13" stroke-dasharray="${(frac * c).toFixed(2)} ${c.toFixed(2)}"
+       stroke-dashoffset="${(-offset * c).toFixed(2)}" transform="rotate(-90 ${size / 2} ${size / 2})"
+       ${p.into ? 'opacity=".45"' : ""}/>`;
+    offset += frac;
+    return seg;
+  }).join("");
+  const legend = parts.map(p => {
+    const pct = total > 0 ? (100 * p.value / total).toFixed(1) : "0.0";
+    return `<div><span class="swatch" style="${swatch(p, false)}"></span>
+            <span class="muted">${p.label}</span> <b>${num(p.value, 2)}</b>
+            <span class="muted">${unit} · ${pct}%</span></div>`;
+  }).join("");
+  return `<div class="donutrow">
+    <svg viewBox="0 0 ${size} ${size}">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--line)" stroke-width="13"/>
+      ${arcs}
+      <text x="${size / 2}" y="${size / 2 - 2}" text-anchor="middle" class="flowlabel">${num(total, 1)}</text>
+      <text x="${size / 2}" y="${size / 2 + 13}" text-anchor="middle" class="flowsub">${unit}</text>
+    </svg><div class="legend">${legend}</div></div>`;
+}
+
+// Charts publish what they drew, so the shared hover handler can map a cursor position
+// back to a data point without recomputing scales it does not own. Keyed by container id,
+// because a period shows two charts at once and a single global would have them fight.
+const chartStates = {};
+
+const FORMAT = {
+  W:   { value: v => kw(v),                axis: v => (v / 1000).toFixed(1) },
+  kWh: { value: v => num(v, 2) + " kWh",   axis: v => v.toFixed(1) },
+};
+
+function timeLabel(ts, span) {
+  const d = new Date(ts * 1000);
+  if (span <= 2 * 86400) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (span <= 70 * 86400) return d.toLocaleDateString([], { day: "2-digit", month: "short" });
+  return d.toLocaleDateString([], { month: "short" });
+}
+
+// An axis label on a bucketed chart is the moment the bucket opens, which on its own
+// leaves the reader guessing whether 12:00 means the hour before or the hour after. Where
+// a value covers a span of time rather than describing an instant, name both ends of it.
+function bucketRange(ts, bucket) {
+  const start = new Date(ts * 1000);
+  // A month or a whole day is a period with a name; spelling it as a range between two
+  // clock times would be less clear, not more.
+  if (bucket >= 28 * 86400) return start.toLocaleDateString([], { month: "long", year: "numeric" });
+  if (bucket >= 86400) return start.toLocaleDateString([], { weekday: "short", day: "2-digit", month: "short" });
+
+  const end = new Date((ts + bucket) * 1000);
+  const clock = d => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const date = d => d.toLocaleDateString([], { day: "2-digit", month: "short" });
+  // The last bucket of a day ends at the next midnight, which belongs to the day being
+  // read rather than to the one starting. Testing the final second keeps it there.
+  const sameDay = new Date((ts + bucket - 1) * 1000).toDateString() === start.toDateString();
+  return sameDay
+    ? `${date(start)}, ${clock(start)}\u2013${clock(end)}`
+    : `${date(start)} ${clock(start)} \u2013 ${date(end)} ${clock(end)}`;
+}
+
+// A series that fills a store rather than drawing on one is marked as the same colour
+// weakened: a pair then reads as one quantity in two directions rather than two
+// quantities. Bars carry that as a lighter fill, lines as a dash -- a line has no area
+// for lightness to work on, and in dark mode a faded stroke fades towards the background.
+// The swatch has to say whichever of the two its chart is saying.
+// Which series the reader has hidden, per chart. Kept because six lines at once is a lot
+// to read, and the point of putting one away is to rescale the axis around what is left --
+// so this cannot be done by hiding the drawn element, the chart has to be built again.
+const HIDDEN_KEY = "s2d.hidden-series";
+let hiddenSeries = new Set();
+try {
+  hiddenSeries = new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]"));
+} catch { /* private window, cleared storage, or a browser that refuses: show everything */ }
+
+const isHidden = (id, key) => hiddenSeries.has(`${id}:${key}`);
+const visible = (id, spec) => spec.filter(s => !isHidden(id, s.key));
+
+function toggleSeries(id, key) {
+  const token = `${id}:${key}`;
+  if (hiddenSeries.has(token)) hiddenSeries.delete(token);
+  else hiddenSeries.add(token);
+  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenSeries])); } catch { /* no store */ }
+  if (chartRedraw[id]) chartRedraw[id]();
+}
+
+// Each chart registers how to rebuild itself, so a legend click can redraw that one chart
+// without reloading the period's data.
+const chartRedraw = {};
+function drawChart(id, render) {
+  chartRedraw[id] = () => {
+    $(id).innerHTML = render();
+    wireChartHover(id);
+    wireLegend(id);
+  };
+  chartRedraw[id]();
+}
+
+function wireLegend(id) {
+  for (const button of document.querySelectorAll(`#${id} .chartkey button`)) {
+    button.onclick = () => toggleSeries(id, button.dataset.key);
+  }
+}
+
+function swatch(s, dashed) {
+  if (!s.into) return `background:${s.colour}`;
+  return dashed
+    ? `background:repeating-linear-gradient(90deg,${s.colour} 0 2px,transparent 2px 4px)`
+    : `background:${s.colour};opacity:.45`;
+}
+
+function chartShell(id, w, h, pad, body, ticks, spec, dots, allSeries) {
+  // The key lists every series, including the ones put away -- otherwise there would be
+  // no way to bring one back. `spec` is what is actually drawn.
+  const key = (allSeries || spec).map(s => {
+    const off = isHidden(id, s.key);
+    return `<button type="button" class="${off ? "off" : ""}" data-key="${s.key}"
+        aria-pressed="${!off}" title="${off ? "Show" : "Hide"} ${s.label}">
+        <span class="swatch" style="${swatch(s, dots)}"></span>
+        <span class="muted">${s.label}</span></button>`;
+  }).join("");
+  // The band is drawn first so the bars sit on top of it rather than under a wash.
+  const band = dots ? "" :
+    `<rect id="${id}-band" class="barband" y="${pad.t}" width="0" height="${h - pad.t}" rx="3" style="display:none"/>`;
+  return `<div class="chartwrap"><svg id="${id}-svg" viewBox="0 0 ${w} ${h}">${band}${body}${ticks}
+      <g id="${id}-guide" style="display:none">
+        ${dots ? `<line class="guide" y1="${pad.t}" y2="${h - pad.b}"/>` +
+                 spec.map(s => `<circle r="3.5" class="guidedot" fill="${s.colour}" style="display:none"/>`).join("") : ""}
+      </g>
+      <rect id="${id}-sel" class="selection" x="0" y="${pad.t}" width="0" height="${h - pad.t - pad.b}" style="display:none"/>
+      <line id="${id}-sel-a" class="seledge" y1="${pad.t}" y2="${h - pad.b}" style="display:none"/>
+      <line id="${id}-sel-b" class="seledge" y1="${pad.t}" y2="${h - pad.b}" style="display:none"/>
+      <rect class="capture" x="${pad.l}" y="${pad.t}" width="${w - pad.l - pad.r}" height="${h - pad.t - pad.b}"/>
+    </svg><div class="charttip" id="${id}-tip"></div></div>
+    <div class="chartkey">${key}</div>`;
+}
+
+function lineChart(id, rows, allSeries, opts = {}) {
+  const unit = opts.unit || "W", fmt = FORMAT[unit];
+  const w = 720, h = opts.height || 210, pad = { l: 42, r: 8, t: 8, b: 22 };
+  const spec = visible(id, allSeries);
+  const points = rows.filter(r => r.ts);
+  if (points.length < 2) return `<div class="empty">${opts.empty || "Not enough history yet."}</div>`;
+  const xs = points.map(r => r.ts);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), span = x1 - x0;
+  let lo = 0, hi = 0;
+  for (const s of spec) for (const r of points) {
+    const v = r[s.key]; if (v === null || v === undefined) continue;
+    lo = Math.min(lo, v); hi = Math.max(hi, v);
+  }
+  if (hi === lo) hi = lo + 1;
+  const X = t => pad.l + (w - pad.l - pad.r) * (t - x0) / Math.max(1, span);
+  const Y = v => pad.t + (h - pad.t - pad.b) * (1 - (v - lo) / (hi - lo));
+
+  const grid = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const v = lo + (hi - lo) * f;
+    return `<line x1="${pad.l}" x2="${w - pad.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"
+             stroke="var(--line)" stroke-width="1"/>
+            <text x="${pad.l - 6}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end" class="flowsub">${fmt.axis(v)}</text>`;
+  }).join("");
+  // A path must open with a moveto. Deciding that by array index and then dropping the
+  // missing values meant a series whose first reading was absent emitted a path starting
+  // with a lineto, which is an error -- the browser drew nothing at all, and the series
+  // vanished rather than starting late. Tracking whether the pen is down fixes that, and
+  // lifting it over a gap stops a straight line being drawn across hours of missing data,
+  // which the energy queries already refuse to do.
+  // What counts as a gap has to be read off the data, not passed in: these points are
+  // evenly spaced by construction, so a step several times the usual one means rows are
+  // missing. Taking it from a caller-supplied constant instead meant a chart whose points
+  // sit an hour apart broke at every single point and drew nothing at all.
+  const steps = [];
+  for (let i = 1; i < points.length; i++) steps.push(points[i].ts - points[i - 1].ts);
+  const typical = steps.sort((a, b) => a - b)[Math.floor(steps.length / 2)] || 0;
+  const maxStep = typical > 0 ? typical * 3 : Infinity;
+  const paths = spec.map(s => {
+    // Collected as runs of consecutive readings rather than emitted inline, so that a run
+    // of one can be told apart from the rest and drawn as something visible.
+    const runs = [];
+    let run = [], previous = null;
+    for (const r of points) {
+      const v = r[s.key];
+      if (v === null || v === undefined) {
+        if (run.length) { runs.push(run); run = []; }
+        previous = null;
+        continue;
+      }
+      if (previous !== null && r.ts - previous > maxStep && run.length) { runs.push(run); run = []; }
+      run.push([X(r.ts), Y(v)]);
+      previous = r.ts;
+    }
+    if (run.length) runs.push(run);
+    // A run of one is a zero-length subpath, and a zero-length subpath paints nothing --
+    // under every line cap, contrary to what the spec suggests. A lone reading between two
+    // gaps would then be a value the tooltip reports at an x where the chart is blank.
+    // Given a hair of width it becomes the dot it ought to be.
+    const d = runs.map(pts => pts.length === 1
+      ? `M${(pts[0][0] - 0.4).toFixed(1)} ${pts[0][1].toFixed(1)} L${(pts[0][0] + 0.4).toFixed(1)} ${pts[0][1].toFixed(1)}`
+      : pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")).join(" ");
+    if (!d) return "";
+    // Dashed rather than faded for the into-the-store direction: a stroke has no area for
+    // lightness to work on, and in dark mode fading one moves it towards the background
+    // instead of away from the other. Round caps round the dot above and the joins; the
+    // dash gaps are widened to 6 because a cap adds half a stroke width at each end.
+    return `<path d="${d.trim()}" fill="none" stroke="${s.colour}" stroke-width="1.6"
+             stroke-linejoin="round" stroke-linecap="round"
+             opacity=".95" ${s.into ? 'stroke-dasharray="4 6"' : ""}/>`;
+  }).join("");
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const t = x0 + span * f;
+    return `<text x="${X(t).toFixed(1)}" y="${h - 6}" text-anchor="middle" class="flowsub">${timeLabel(t, span)}</text>`;
+  }).join("");
+
+  chartStates[id] = { kind: "line", points, spec, pad, w, h, X, Y, fmt, span,
+                      bucket: opts.bucket || 0, snap: opts.snap || 300, x0, x1 };
+  return chartShell(id, w, h, pad, grid + paths, ticks, spec, true, allSeries);
+}
+
+function barChart(id, rows, allSeries, opts = {}) {
+  const unit = opts.unit || "kWh", fmt = FORMAT[unit];
+  const w = 720, h = opts.height || 210, pad = { l: 42, r: 8, t: 8, b: 22 };
+  if (!rows.length) return `<div class="empty">${opts.empty || "No completed periods recorded yet."}</div>`;
+  const spec = visible(id, allSeries);
+  const label = opts.label || (r => r.period);
+  const hi = Math.max(1e-6, ...rows.flatMap(r => spec.map(s => r[s.key] || 0)));
+  const slot = (w - pad.l - pad.r) / rows.length;
+  // Guarded against every series being put away, which would otherwise divide by zero and
+  // give every bar a width of Infinity.
+  const bw = spec.length ? Math.max(0.8, (slot - Math.min(3, slot * 0.25)) / spec.length) : 0;
+  const Y = v => pad.t + (h - pad.t - pad.b) * (1 - v / hi);
+
+  const grid = [0, 0.5, 1].map(f => `<line x1="${pad.l}" x2="${w - pad.r}" y1="${Y(hi * f).toFixed(1)}"
+      y2="${Y(hi * f).toFixed(1)}" stroke="var(--line)"/>
+      <text x="${pad.l - 6}" y="${(Y(hi * f) + 3).toFixed(1)}" text-anchor="end" class="flowsub">${fmt.axis(hi * f)}</text>`).join("");
+  const bars = rows.map((r, i) => spec.map((s, j) => {
+    const v = r[s.key] || 0;
+    const x = pad.l + i * slot + (slot - bw * spec.length) / 2 + j * bw;
+    return `<rect x="${x.toFixed(1)}" y="${Y(v).toFixed(1)}" width="${bw.toFixed(1)}"
+             height="${Math.max(0, h - pad.b - Y(v)).toFixed(1)}" fill="${s.colour}" rx="1"
+             ${s.into ? 'fill-opacity=".45"' : ""}/>`;
+  }).join("")).join("");
+  const step = Math.ceil(rows.length / 12);
+  const ticks = rows.map((r, i) => i % step ? "" :
+    `<text x="${(pad.l + i * slot + slot / 2).toFixed(1)}" y="${h - 6}" text-anchor="middle"
+      class="flowsub">${label(r, i)}</text>`).join("");
+
+  // Bars are placed by index, but selection needs a time axis. Buckets are evenly spaced,
+  // so the two map linearly onto each other.
+  const first = rows[0].ts, bucketStep = opts.bucket || 3600;
+  const last = (rows[rows.length - 1].ts ?? first) + bucketStep;
+  chartStates[id] = { kind: "bar", points: rows, spec, pad, w, h, slot, fmt, label,
+                      X: (_t, i) => pad.l + i * slot + slot / 2, Y, bucket: bucketStep,
+                      snap: opts.snap || bucketStep, x0: first ?? 0, x1: last };
+  return chartShell(id, w, h, pad, grid + bars, ticks, spec, false, allSeries);
+}
+
+// A chart is only readable to the pixel; a reader wanting "what was everything doing at
+// 14:20" has to compare several lines against an axis by eye. This resolves the cursor to
+// the nearest sample and shows every series at that one moment.
+function wireChartHover(id) {
+  const svg = $(`${id}-svg`), state = chartStates[id];
+  if (!svg || !state) return;
+  const guide = $(`${id}-guide`), tip = $(`${id}-tip`), band = $(`${id}-band`);
+  const line = guide.querySelector("line");
+  const dots = [...guide.querySelectorAll("circle")];
+  const { points, spec, pad, w, X, Y, kind, fmt, span, label } = state;
+  const isBar = kind === "bar";
+
+  const hideHighlight = () => {
+    guide.style.display = "none";
+    if (band) band.style.display = "none";
+    tip.style.display = "none";
+  };
+
+  const show = event => {
+    const box = svg.getBoundingClientRect();
+    if (!box.width) return;
+    // The SVG scales to its container, so the pointer has to be mapped back into viewBox
+    // units before it means anything to the drawing code.
+    const vx = (event.clientX - box.left) / box.width * w;
+
+    let index = 0;
+    if (isBar) {
+      index = Math.max(0, Math.min(points.length - 1, Math.floor((vx - pad.l) / state.slot)));
+    } else {
+      let best = Infinity;
+      points.forEach((r, i) => { const d = Math.abs(X(r.ts) - vx); if (d < best) { best = d; index = i; } });
+    }
+    const row = points[index];
+    const px = isBar ? X(null, index) : X(row.ts);
+
+    if (isBar) {
+      band.setAttribute("x", (pad.l + index * state.slot).toFixed(1));
+      band.setAttribute("width", state.slot.toFixed(1));
+      band.style.display = "";
+    } else {
+      line.setAttribute("x1", px); line.setAttribute("x2", px);
+      dots.forEach((dot, i) => {
+        const v = row[spec[i].key];
+        if (v === null || v === undefined) { dot.style.display = "none"; return; }
+        dot.style.display = ""; dot.setAttribute("cx", px); dot.setAttribute("cy", Y(v));
+      });
+      guide.style.display = "";
+    }
+
+    // A bucketed row is an amount accumulated over a span, so it is headed by that span.
+    // Only a chart of instantaneous readings is headed by a single moment.
+    const bucket = state.bucket || 0;
+    const when = bucket && row.ts !== null && row.ts !== undefined
+      ? bucketRange(row.ts, bucket)
+      : isBar ? (label ? label(row, index) : row.period)
+        : new Date(row.ts * 1000).toLocaleString([],
+            { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" });
+    tip.innerHTML = `<div class="when">${when}</div>` + spec.map(s => {
+      const v = row[s.key];
+      const text = v === null || v === undefined ? "&mdash;" : fmt.value(v);
+      return `<div class="line"><span><span class="swatch" style="${swatch(s, !isBar)}"></span>
+              <span class="muted">${s.label}</span></span><b>${text}</b></div>`;
+    }).join("");
+
+    // Positioning has to measure before it clamps. An absolutely positioned box with no
+    // width takes whatever space remains between its left edge and the container, so
+    // clamping alone near the right-hand edge leaves it a sliver and the text wraps.
+    tip.classList.remove("below");
+    tip.style.display = "block";
+    tip.style.whiteSpace = "nowrap";
+    tip.style.width = "auto";
+    tip.style.left = "0px";
+    const tipWidth = tip.offsetWidth;
+    const wrapWidth = svg.parentElement.clientWidth, gap = 14;
+    // Whether the box can float is not a question about its size but about what it would
+    // land on: it may go beside the highlighted column, never over it. A bar occupies a
+    // width and a point does not, so one has two edges to clear and the other has one.
+    const scale = wrapWidth / w;
+    const near = (isBar ? pad.l + index * state.slot : px) * scale;
+    const far = (isBar ? pad.l + (index + 1) * state.slot : px) * scale;
+    const roomLeft = near - gap, roomRight = wrapWidth - far - gap;
+    // Height matters for the same reason width does: a box taller than the chart hangs
+    // out of the card below it, over the legend and whatever follows.
+    if (tipWidth > Math.max(roomLeft, roomRight) || tip.offsetHeight > box.height) {
+      // Nowhere to float, so it stops competing for the space and drops below.
+      tip.classList.add("below");
+      tip.style.left = ""; tip.style.width = ""; tip.style.whiteSpace = "";
+      return;
+    }
+    tip.style.width = tipWidth + "px";
+    const left = roomRight >= tipWidth ? far + gap : near - gap - tipWidth;
+    tip.style.left = Math.max(0, Math.min(wrapWidth - tipWidth, left)) + "px";
+  };
+
+  // --- drag to zoom ------------------------------------------------------------
+  //
+  // Dragging a range is only pleasant if it does not demand pixel accuracy, so the edges
+  // snap to whole intervals, and a drag that lands within one interval of either end takes
+  // the end exactly. That makes "from here to the end of the graph" a gesture rather than
+  // a test of aim.
+  const { snap, x0, x1 } = state;
+  const plot = w - pad.l - pad.r;
+  const sel = $(`${id}-sel`), edgeA = $(`${id}-sel-a`), edgeB = $(`${id}-sel-b`);
+  const capture = svg.querySelector(".capture");
+  let anchor = null;
+
+  const timeAt = event => {
+    const box = svg.getBoundingClientRect();
+    // A hidden or not-yet-laid-out chart has no width, and dividing by it yields NaN
+    // coordinates that propagate silently into an invalid selection.
+    if (!box.width) return null;
+    const vx = (event.clientX - box.left) / box.width * w;
+    const raw = x0 + (vx - pad.l) / plot * (x1 - x0);
+    const snapped = Math.round(raw / snap) * snap;
+    if (snapped <= x0 + snap) return x0;
+    if (snapped >= x1 - snap) return x1;
+    return snapped;
+  };
+  const toX = ts => pad.l + (ts - x0) / Math.max(1, x1 - x0) * plot;
+
+  const paint = (a, b) => {
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    const xa = toX(lo), xb = toX(hi);
+    sel.setAttribute("x", xa); sel.setAttribute("width", Math.max(0, xb - xa));
+    edgeA.setAttribute("x1", xa); edgeA.setAttribute("x2", xa);
+    edgeB.setAttribute("x1", xb); edgeB.setAttribute("x2", xb);
+    for (const el of [sel, edgeA, edgeB]) el.style.display = "";
+    const fmtWhen = t => new Date(t * 1000).toLocaleString([], snap >= 86400
+      ? { day: "2-digit", month: "short" }
+      : { hour: "2-digit", minute: "2-digit" });
+    tip.innerHTML = `<div class="when">Zoom to</div><div class="line"><b>${fmtWhen(lo)} &ndash; ${fmtWhen(hi)}</b></div>`;
+    tip.classList.remove("below");
+    tip.style.display = "block"; tip.style.whiteSpace = "nowrap";
+    tip.style.width = "auto"; tip.style.left = "0px";
+    const tw = tip.offsetWidth, wrapWidth = svg.parentElement.clientWidth;
+    tip.style.width = tw + "px";
+    tip.style.left = Math.max(0, Math.min(wrapWidth - tw, (xa + xb) / 2 / w * wrapWidth - tw / 2)) + "px";
+  };
+  const clearSelection = () => {
+    for (const el of [sel, edgeA, edgeB]) el.style.display = "none";
+  };
+
+  let sticky = false;
+  const dismiss = () => {
+    sticky = false;
+    hideHighlight();
+    removeEventListener("scroll", dismiss, true);
+    document.removeEventListener("pointerdown", dismiss, true);
+  };
+  const stick = event => {
+    sticky = true;
+    show(event);
+    // Registered only while a highlight is being held, and removed by the first of the
+    // two that fires, so nothing accumulates across redraws of the chart.
+    addEventListener("scroll", dismiss, { capture: true, passive: true });
+    document.addEventListener("pointerdown", dismiss, true);
+  };
+
+  capture.addEventListener("pointerdown", event => {
+    // Capture the pointer so a drag that leaves the chart still finishes here.
+    capture.setPointerCapture(event.pointerId);
+    anchor = timeAt(event);
+    if (anchor === null) return;
+    hideHighlight();
+    paint(anchor, anchor);
+    event.preventDefault();
+  });
+  capture.addEventListener("pointermove", event => {
+    if (anchor === null) { show(event); return; }
+    const at = timeAt(event);
+    if (at !== null) paint(anchor, at);
+  });
+  const finish = event => {
+    if (anchor === null) return;
+    const end = timeAt(event);
+    if (end === null) { anchor = null; clearSelection(); return; }
+    const [lo, hi] = anchor < end ? [anchor, end] : [end, anchor];
+    anchor = null;
+    clearSelection();
+    tip.style.display = "none";
+    // A tap is a drag of nothing; do not zoom into a single instant.
+    if (hi - lo >= snap) { applyZoom(Math.round(lo), Math.round(hi)); return; }
+    // A finger has no hover, so the tap itself has to be the question. Nothing will ever
+    // arrive to end it -- a touch screen sends pointerleave the moment the finger lifts --
+    // so it stays put until the reader scrolls or touches something else.
+    if (event.pointerType !== "mouse") stick(event);
+  };
+  capture.addEventListener("pointerup", finish);
+  capture.addEventListener("pointercancel", () => { anchor = null; clearSelection(); });
+
+  svg.addEventListener("pointermove", event => { if (anchor === null) show(event); });
+  svg.addEventListener("pointerleave", () => {
+    // A held highlight outlives the pointer that asked for it; the lifted finger fires
+    // this immediately afterwards and would otherwise undo the tap.
+    if (anchor !== null || sticky) return;
+    hideHighlight();
+  });
+}
+
+function renderTabs() {
+  $("periodtabs").innerHTML = PERIODS.map(p =>
+    `<button role="tab" aria-selected="${p.key === period}" data-period="${p.key}">${p.label}</button>`).join("");
+  for (const b of $("periodtabs").children) {
+    b.onclick = () => {
+      period = b.dataset.period;
+      periodOffset = 0;      // switching period lands on the current one, not the nth-previous
+      zoom = null;
+      renderTabs(); renderNav(); loadEnergy();
+    };
+  }
+}
+
+async function loadEnergy() {
+  const bounds = periodWindow(period, periodOffset);
+  const since = zoom ? zoom.since : bounds.since;
+  const until = zoom ? zoom.until : bounds.until;
+
+  // Lifetime comes from the counters themselves; history only knows what it has seen.
+  if (period === "lifetime") {
+    // Every string, not the first two: on a four-input inverter the headline was half the
+    // array's lifetime production, presented as the whole of it.
+    const pv = Array.from({ length: lastShape.pv_strings || 2 },
+      (_, i) => lastValues[`cumulative_dc_energy_yield_mppt${i + 1}`] || 0).reduce((a, b) => a + b, 0);
+    $("yieldtiles").innerHTML = [
+      tile("PV yield (lifetime)", num(pv, 0), "kWh", "var(--pv)"),
+      ...Array.from({ length: lastShape.pv_strings || 2 }, (_, i) =>
+        tile(lastLabels[i] || `String ${i + 1}`,
+             num(lastValues[`cumulative_dc_energy_yield_mppt${i + 1}`], 0), "kWh", "var(--pv)")),
+      tile("Inverter output", num(lastValues.accumulated_yield_energy, 0), "kWh", "var(--house)"),
+      tile("Battery charged", num(lastValues.storage_total_charge, 0), "kWh", "var(--battery)"),
+      tile("Battery discharged", num(lastValues.storage_total_discharge, 0), "kWh", "var(--battery)"),
+    ].join("");
+    $("proddonut").innerHTML = ""; $("consdonut").innerHTML = ""; $("chart").innerHTML = "";
+    $("energynote").textContent =
+      "Lifetime figures are the inverter's own counters. PV yield is measured on the DC side per string; " +
+      "inverter output is measured after conversion.";
+    return;
+  }
+
+  // Each period gets a coarse view and a finer one. The coarse chart answers "what did
+  // this period do"; the fine one answers "when within it". They come from different
+  // sources: calendar totals from the meter counters, sub-period detail integrated from
+  // the power samples, since no counter is reported at that resolution.
+  const coarse = period === "day"
+    ? url(`api/series?since=${since}&until=${until}&points=400`)
+    : url(`api/energy/buckets?since=${since}&until=${until}&bucket=${period === "month" ? "day" : "month"}`);
+  // Resolution follows the window rather than the period, so zooming in actually reveals
+  // more instead of redrawing the same buckets over a shorter axis.
+  const span = until - since;
+  const fineBucket = span <= 6 * 3600 ? 900 : span <= 3 * 86400 ? 3600 : 86400;
+  const coarseSnap = period === "day" ? 300 : 86400;
+
+  const [energy, extra, profile] = await Promise.all([
+    fetch(url(`api/energy?since=${since}&until=${until}`)).then(r => r.json()).catch(() => ({})),
+    fetch(coarse).then(r => r.json()).catch(() => ({ rows: [] })),
+    fetch(url(`api/energy/profile?since=${since}&until=${until}&bucket=${fineBucket}`))
+      .then(r => r.json()).catch(() => ({ rows: [] })),
+  ]);
+
+  lastEnergy = energy;
+  const money = energy.money;
+  $("yieldtiles").innerHTML = [
+    tile("PV yield", num(energy.pv_yield_kwh, 2), "kWh", "var(--pv)"),
+    tile("House use", num(energy.house_consumption_kwh, 2), "kWh", "var(--house)"),
+    // Both directions of both flows, matching the chart below. Showing only what went in
+    // to the battery and only what came from the grid left half of each pair on the chart
+    // with no total anywhere.
+    ...(lastCapabilities.has("battery_1") ? [
+      tile("To battery", num(energy.battery_charged_kwh, 2), "kWh", "var(--battery)"),
+      tile("From battery", num(energy.battery_discharged_kwh, 2), "kWh", "var(--battery)"),
+    ] : []),
+    tile("From grid", num(energy.grid_import_kwh, 2), "kWh", "var(--grid)"),
+    tile("To grid", num(energy.grid_export_kwh, 2), "kWh", "var(--grid)"),
+    tile("Self-sufficiency", num(energy.self_sufficiency_pct, 1), "%", "var(--battery)",
+         (energy.self_sufficiency_pct || 0) / 100),
+    ...(money ? [tile("Benefit", `${money.symbol}${num(money.benefit, 2)}`, "", "var(--battery)")] : []),
+  ].join("");
+
+  const produced = energy.pv_yield_kwh, exported = energy.grid_export_kwh;
+  // Where the production actually went, measured, rather than "everything not exported"
+  // -- which counts what is still in the battery as though the house had burned it.
+  const split = energy.solar_to_house_kwh !== undefined;
+  $("proddonut").innerHTML = (produced === null || produced === undefined)
+    ? `<div class="empty">No production recorded for this period yet.</div>`
+    : donut(split ? [
+        { label: "Used in the house", value: energy.solar_to_house_kwh || 0, colour: "var(--battery)" },
+        { label: "Stored in the battery", value: energy.solar_to_battery_kwh || 0, colour: "var(--battery)", into: true },
+        { label: "Fed to grid", value: energy.solar_to_grid_kwh || 0, colour: "var(--pv)" },
+        { label: "Conversion loss", value: energy.conversion_loss_kwh || 0, colour: "var(--line)" },
+      ] : [
+        { label: "Self-consumed", value: Math.max(0, produced - (exported || 0)), colour: "var(--battery)" },
+        { label: "Fed to grid", value: exported || 0, colour: "var(--pv)" },
+      ], produced, "kWh");
+
+  const house = energy.house_consumption_kwh;
+  // The battery is its own source. Folding it into "from solar" called stored grid energy
+  // solar, and left the two donuts describing the same day incompatibly.
+  $("consdonut").innerHTML = (house === null || house === undefined)
+    ? `<div class="empty">No consumption recorded for this period yet.</div>`
+    : donut([
+        { label: "From solar", value: Math.max(0, energy.from_solar_kwh || 0), colour: "var(--battery)" },
+        ...(energy.from_battery_kwh !== undefined
+          ? [{ label: "From battery", value: energy.from_battery_kwh || 0, colour: "var(--battery)", into: true }] : []),
+        { label: "From grid", value: energy.from_grid_kwh || 0, colour: "var(--grid)" },
+      ], house, "kWh");
+
+  // One signed line per flow made direction something to be read off the zero axis, and
+  // over a bucket it hid the mixed case entirely: the series is an average, so a few
+  // minutes of charging against a few of discharging came back as gentle charging. The
+  // server now splits each flow before averaging, so both directions survive.
+  const POWER_SPEC = [
+    { key: "pv_w", label: "PV output", colour: "var(--pv)" },
+    { key: "house_w", label: "House load", colour: "var(--house)" },
+    { key: "battery_charge_w", label: "To battery", colour: "var(--battery)", into: true },
+    { key: "battery_discharge_w", label: "From battery", colour: "var(--battery)" },
+    { key: "grid_export_w", label: "To grid", colour: "var(--grid)", into: true },
+    { key: "grid_import_w", label: "From grid", colour: "var(--grid)" },
+  ];
+  // Solar above house load has to go somewhere, and within one bucket it can go both
+  // ways at once -- charging early in the hour and covering a peak later in it. Showing
+  // only what came out of the battery leaves the other half of that unaccounted for.
+  const ENERGY_SPEC = [
+    { key: "pv_kwh", label: "Solar", colour: "var(--pv)" },
+    { key: "house_kwh", label: "House", colour: "var(--house)" },
+    { key: "battery_charged_kwh", label: "To battery", colour: "var(--battery)", into: true },
+    { key: "battery_discharged_kwh", label: "From battery", colour: "var(--battery)" },
+    { key: "grid_export_kwh", label: "To grid", colour: "var(--grid)", into: true },
+    { key: "grid_import_kwh", label: "From grid", colour: "var(--grid)" },
+  ];
+  const BUCKET_SPEC = [
+    { key: "pv_yield_kwh", label: "Production", colour: "var(--pv)" },
+    { key: "house_consumption_kwh", label: "Consumption", colour: "var(--house)" },
+    { key: "battery_charged_kwh", label: "Battery charged", colour: "var(--battery)", into: true },
+    { key: "battery_discharged_kwh", label: "Battery discharged", colour: "var(--battery)" },
+  ];
+
+  drawChart("chart", () => period === "day"
+    ? lineChart("chart", extra.rows || [], POWER_SPEC, { unit: "W", snap: coarseSnap })
+    : barChart("chart", extra.rows || [], BUCKET_SPEC,
+               { unit: "kWh", snap: coarseSnap, bucket: period === "month" ? 86400 : 2592000 }));
+
+  // Only whole buckets are shown: the one in progress is always short and would read as a
+  // collapse rather than as an hour that has not finished.
+  const fine = (profile.rows || []).filter(r => r.coverage > 0.6);
+  const fineSpec = { 900: "Energy per 15 minutes", 3600: "Energy per hour", 86400: "Energy per day" }[fineBucket];
+  // The axis has room for one time per bucket, so it shows the start. Saying so once here
+  // costs nothing and settles the question the axis alone cannot answer.
+  const fineWord = { 900: "15 minutes", 3600: "hour", 86400: "day" }[fineBucket];
+  const fineShape = period === "day" ? "bar" : "point";
+  $("chart2head").innerHTML = fine.length
+    ? `${fineSpec}<span class="convention">each ${fineShape} covers the ${fineWord} starting at its label</span>`
+    : "";
+  drawChart("chart2", () => period === "day"
+    ? barChart("chart2", fine, ENERGY_SPEC, { unit: "kWh", height: 150,
+        bucket: fineBucket, snap: fineBucket, label: r => timeLabel(r.ts, span),
+        empty: "Detail appears once a few buckets have been recorded." })
+    : lineChart("chart2", fine, ENERGY_SPEC, { unit: "kWh", height: 150,
+        bucket: fineBucket, snap: fineBucket,
+        empty: "Not enough history yet for this resolution." }));
+
+  // Says which meter the grid figures came from and what a kilowatt-hour was priced at,
+  // because both are assumptions a reader would otherwise have to guess at when the
+  // numbers are compared against an energy supplier's own app.
+  const rate = money && money.delivered_price_per_kwh
+    ? ` Priced at ${money.symbol}${num(money.delivered_price_per_kwh, 4)} per kWh delivered.` : "";
+  const source = energy.metered_by === "utility meter"
+    ? " Grid figures come from your utility meter." : "";
+  $("energynote").textContent = money
+    ? `${money.symbol}${num(money.saved, 2)} not spent importing `
+      + `${money.avoided_kwh === undefined ? "" : `the ${num(money.avoided_kwh, 2)} kWh `}`
+      + `the house took from solar and the battery, `
+      + `${money.symbol}${num(money.earned, 2)} earned exporting, `
+      + `${money.symbol}${num(money.grid_cost, 2)} spent on imported energy.${rate}${source}`
+    : "No prices are set, so this period is not valued in money. "
+      + setting("Import price, day tariff",
+                "the price of one kWh in whole currency units \u2014 type 0.245 for 24.5 "
+                + "cents, not 24.5.");
+}
+
+// The server writes a snapshot every poll interval whether or not anything changed, so
+// silence is unambiguous: nothing for several intervals means the stream is dead, however
+// healthy the socket claims to be. That matters because `onerror` only fires once the
+// browser notices the connection broke, and a half-open one -- a laptop that slept, a
+// network that changed underneath it, the add-on restarting -- can sit there indefinitely
+// without anybody noticing. The page then goes on showing the last reading, which is
+// self-consistent and looks exactly like a quiet night.
+// Two thresholds, because noticing and complaining are different jobs. Several missed
+// pushes are enough to be sure the stream is dead and to start reconnecting -- there is no
+// reason to sit on that -- but a stall of a few seconds is not news, and a banner for every
+// one of them only teaches the reader to ignore banners. So the reconnect happens quietly
+// at the first threshold and usually succeeds before anybody sees anything; the loud one
+// waits until the figures really have gone stale.
+const QUIET_S = 15;
+const ALARM_S = 300;
+const RECONNECT_BACKOFF_MS = 8000;
+
+let source = null;
+// Only a delivered reading counts as a sign of life. Opening a connection is not one: a
+// stream that answers and then says nothing looks identical at the socket, and letting a
+// reconnect touch this made the watchdog restart its own countdown every time it fired,
+// so the silence it was watching for could never accumulate.
+let lastSignalAt = Date.now();
+let lastMessageAt = 0;   // an actual reading, which is what the page is showing
+let lastStats = {};
+let reconnectAt = 0;
+
+function connect() {
+  if (source) { try { source.close(); } catch { /* already gone */ } }
+  reconnectAt = Date.now() + RECONNECT_BACKOFF_MS;
+  source = new EventSource(url("events"));
+  source.onmessage = e => { try { render(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+  source.onerror = () => { freshness(); setTimeout(connect, 3000); };
+}
+
+function since(seconds) {
+  if (seconds < 90) return `${Math.round(seconds)}s`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)} min`;
+  return `${Math.round(seconds / 3600)} h`;
+}
+
+// Runs on a timer of its own, so it keeps telling the truth precisely when nothing is
+// arriving to prompt it.
+function freshness() {
+  const silent = (Date.now() - lastSignalAt) / 1000;
+  const bar = $("stalebar"), dot = $("dot");
+
+  if (silent > QUIET_S) {
+    dot.className = "dot" + (silent > ALARM_S ? " down" : " stale");
+    $("freshness").textContent = lastMessageAt ? `no update for ${since(silent)}` : "connecting…";
+    if (lastMessageAt && silent > ALARM_S) {
+      // Dated from the reading itself, not from its arrival: the collector's own age is
+      // how far behind the inverter the figure already was when it reached the page.
+      const taken = new Date(lastMessageAt - (lastStats.live_age_s || 0) * 1000);
+      bar.innerHTML = `<b>Not receiving updates.</b> The figures below are from
+        ${taken.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} and are not current.`;
+      bar.hidden = false;
+    } else {
+      bar.hidden = true;
+    }
+    if (Date.now() >= reconnectAt) connect();
+    return;
+  }
+
+  bar.hidden = true;
+  const age = lastStats.live_age_s;
+  dot.className = "dot" + (!lastStats.connected ? " down" : age > 15 ? " stale" : "");
+  $("freshness").textContent = !lastStats.connected ? "disconnected"
+    : age === null || age === undefined ? "waiting"
+    : `${num(age, 1)}s ago · ${num(lastStats.live_cycle_ms, 0)}ms cycle`;
+}
+let lastFlow = null;
+addEventListener("resize", () => { if (lastFlow) drawFlow(lastFlow); });
+
+fetch(url("api/live")).then(r => r.json()).then(render).catch(() => {});
+connect();
+setInterval(freshness, 1000);
+// A tab that was hidden while the machine slept comes back with a connection that is
+// already dead, and no event will say so. Both of these are worth one immediate look.
+addEventListener("visibilitychange", () => { if (!document.hidden) { reconnectAt = 0; freshness(); } });
+addEventListener("online", () => { reconnectAt = 0; freshness(); });
+renderTabs();
+renderNav();
+loadEnergy();
+loadPanelHealth();
+setInterval(loadPanelHealth, 300000);
+loadControl();
+setInterval(loadControl, 120000);
+loadPacks();
+loadEfficiency();
+setInterval(() => { loadPacks(); loadEfficiency(); }, 600000);
+// Energy totals move slowly, and each refresh is several database queries.
+// Do not refresh under someone who is reading a past period or a selected range.
+setInterval(() => { if (periodOffset === 0 && !zoom) loadEnergy(); }, 60000);
+</script>
+</body>
+</html>
