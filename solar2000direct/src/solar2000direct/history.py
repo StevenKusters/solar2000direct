@@ -155,6 +155,11 @@ MAX_SAMPLE_GAP = 300
 assuming power held constant across a ten-minute outage invents energy that never flowed."""
 
 MAX_PLAUSIBLE_KW = 100.0
+
+# The charge band from which pack imbalance is worth reading, and the last one: it runs to
+# 100% inclusive rather than opening a sixth band above it. LFP's voltage plateau is flat
+# through the middle, so only here is the charge estimate anchored enough to trust.
+HIGH_SOC_BAND = 80
 """Ceiling on how fast a counter may legitimately advance, in kW.
 
 Counters do not only go up smoothly. They reset (a replaced meter, a firmware daily
@@ -1138,7 +1143,14 @@ class History:
             "  FROM battery_pack_samples WHERE ts BETWEEN ? AND ? AND voltage > 0 "
             "  GROUP BY ts HAVING COUNT(*) > 1"
             ") "
-            "SELECT CAST(mean_soc / 20 AS INTEGER) * 20 AS band, COUNT(*) AS samples, "
+            # Banded in twenties, with the top band closed at 100 rather than left open.
+            # Integer division put a full battery in a band of its own: 100 / 20 = 5, so
+            # 100% charge was reported as "100-119%", a range no state of charge can be in.
+            # It stranded the most diagnostic readings there is -- at full charge the BMS
+            # clamps every pack to 100% while their measured voltages diverge most, which
+            # is precisely the imbalance this card exists to show, and it sat outside the
+            # figure because the high-charge summary reads bands, not samples.
+            "SELECT MIN(CAST(mean_soc / 20 AS INTEGER) * 20, 80) AS band, COUNT(*) AS samples, "
             "       AVG(soc_spread) AS soc_spread, AVG(voltage_spread) AS voltage_spread, "
             "       AVG(mean_soc) AS mean_soc "
             "FROM per_sample GROUP BY band ORDER BY band",
@@ -1181,7 +1193,9 @@ class History:
             "until": until,
             "bands": [
                 {
-                    "soc_band": f"{row['band']}-{row['band']+19}%",
+                    # The top band runs to 100 inclusive; every other one spans twenty.
+                    "soc_band": (f"{row['band']}-100%" if row["band"] == HIGH_SOC_BAND
+                                 else f"{row['band']}-{row['band'] + 19}%"),
                     "mean_soc_pct": round(row["mean_soc"], 1),
                     "samples": row["samples"],
                     "soc_spread_pct": round(row["soc_spread"], 2),
@@ -1199,7 +1213,7 @@ class History:
         }
 
         # Only a high-charge band says anything trustworthy about balance.
-        high = [row for row in rows if row["band"] >= 80]  # noqa: PLR2004
+        high = [row for row in rows if row["band"] >= HIGH_SOC_BAND]
         if high:
             worst = max(high, key=lambda r: r["soc_spread"])
             result["balance_at_high_soc_pct"] = round(worst["soc_spread"], 2)

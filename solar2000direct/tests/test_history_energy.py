@@ -492,6 +492,49 @@ def main() -> int:
         check("beside the window's total import",
               near(summary.get("grid_import_kwh"), 10.0), f"got {summary.get('grid_import_kwh')!r}")
 
+    # --- a full battery belongs in the top band, not in one of its own -----------------
+    #
+    # Integer division gave 100% charge its own band: 100 / 20 = 5, labelled "100-119%",
+    # a range no state of charge can occupy. It is not cosmetic. At full charge the BMS
+    # clamps every pack to 100% while their measured voltages diverge most, so those
+    # readings carry the clearest imbalance signal there is -- and the high-charge figure
+    # is taken across bands, so a band on its own was simply not consulted.
+    print("\ncharge bands close at 100")
+    with tempfile.TemporaryDirectory() as tmp:
+        history = History(HistoryConfig(enabled=True, path=str(Path(tmp) / "packs.db")), State())
+        connection = history._connect()
+        history._connection = connection
+
+        def sample(ts: int, socs: tuple[float, ...], volts: tuple[float, ...]) -> None:
+            for pack, (soc, voltage) in enumerate(zip(socs, volts, strict=True), start=1):
+                connection.execute(
+                    "INSERT INTO battery_pack_samples (ts, unit, pack, soc, voltage) "
+                    "VALUES (?, 1, ?, ?, ?)", (ts, pack, soc, voltage))
+
+        # Two samples at 92% with a two-point spread, and one at a full 100% where the
+        # packs report identical charge but visibly different voltage.
+        sample(t0 + 0, (91.0, 93.0), (52.0, 52.4))
+        sample(t0 + 60, (91.0, 93.0), (52.0, 52.4))
+        sample(t0 + 120, (100.0, 100.0), (52.0, 53.5))
+        connection.commit()
+
+        balance = asyncio.run(history.pack_balance(t0, t0 + 300))
+        labels = [band["soc_band"] for band in balance["bands"]]
+        check("no band claims a charge above 100%",
+              not [name for name in labels if name.startswith(("100-", "120-"))],
+              f"bands: {labels}")
+        check("the top band is labelled to 100 inclusive", labels == ["80-100%"], f"bands: {labels}")
+        top = balance["bands"][0]
+        check("and it holds the full-charge readings too", top["samples"] == 3,
+              f"got {top['samples']} readings, expected 3")
+        # Voltage spread averages 0.4, 0.4 and 1.5 -> 0.767; stranded, it read 0.4.
+        check("so the voltage spread includes the full-charge divergence",
+              near(top["voltage_spread_v"], 0.767, 0.005),
+              f"got {top['voltage_spread_v']}")
+        check("and the high-charge imbalance figure is reported",
+              near(balance.get("balance_at_high_soc_pct"), 1.33, 0.01),
+              f"got {balance.get('balance_at_high_soc_pct')!r}")
+
     print("\n" + ("all checks passed" if not FAILURES else f"FAILED: {', '.join(FAILURES)}"))
     return 0 if not FAILURES else 1
 

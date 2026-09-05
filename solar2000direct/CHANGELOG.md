@@ -3,6 +3,21 @@
 Home Assistant shows this when an update is available. Entries describe what changed for
 you, and flag anything that needs action on your side.
 
+## 1.0.1
+
+- **A full battery no longer lands in a charge band that cannot exist.** Battery pack
+  balance is grouped in twenties, and integer division gave 100% a band of its own,
+  labelled "100-119%" — a range no state of charge can be in. The top band now closes at
+  100 inclusive.
+
+  Not cosmetic, and it was hiding the readings that matter most. At full charge the BMS
+  clamps every pack to 100% while their measured voltages diverge the furthest apart they
+  ever get, which is exactly the imbalance this card exists to show. Because the
+  high-charge figure is taken across bands rather than across readings, those samples sat
+  in a band of their own and were never consulted. On the installation that turned this
+  up, three readings carried more than twice the voltage spread of any other band on the
+  card and counted for nothing.
+
 ## 1.0.0
 
 First public release.

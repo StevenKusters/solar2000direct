@@ -1,5 +1,5 @@
 name: solar2000direct
-version: "1.0.0"
+version: "1.0.1"
 slug: solar2000direct
 description: Real-time telemetry read locally from Huawei SUN2000 inverters over Modbus TCP
 url: https://github.com/StevenKusters/solar2000direct

@@ -1,6 +1,6 @@
 [project]
 name = "solar2000direct"
-version = "1.0.0"
+version = "1.0.1"
 description = "Local, real-time telemetry for Huawei SUN2000 / LUNA2000 installations over Modbus TCP"
 readme = "README.md"
 requires-python = ">=3.12"
